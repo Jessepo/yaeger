@@ -49,3 +49,54 @@ jobs:
             .pio/build/${{ matrix.board }}/firmware.bin
             .pio/build/${{ matrix.board }}/spiffs.bin
 
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/firmware
+
+      - name: Switch to artifacts branch
+        shell: bash
+        run: |
+          git fetch origin artifacts || true
+          if git show-ref --verify --quiet refs/remotes/origin/artifacts; then
+            git checkout artifacts
+          else
+            git checkout --orphan artifacts
+            rm -rf *
+          fi
+
+      - name: Update published firmware
+        shell: bash
+        run: |
+          rm -rf firmware
+          mkdir -p firmware
+          shopt -s nullglob
+          for board_dir in /tmp/firmware/*; do
+            board_name="${board_dir##*/}"
+            board_name="${board_name#firmware-}"
+            mkdir -p "firmware/${board_name}"
+            cp "${board_dir}/"*.bin "firmware/${board_name}/"
+          done
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          if git status --porcelain | grep .; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add -A firmware
+            git commit -m "Publish firmware for ${GITHUB_SHA}"
+            git push origin HEAD:artifacts
+          else
+            echo "No updates to publish"
+          fi
