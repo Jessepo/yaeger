@@ -98,17 +98,17 @@ jobs:
       - name: Collect firmware files
         run: |
           set -euo pipefail
-          mkdir -p upload
+          mkdir -p upload/bins
           shopt -s nullglob
           for board_dir in firmware/*; do
             board_name="${board_dir##*/}"
             board_name="${board_name#firmware-}"
             for file in "${board_dir}"/*.bin; do
               base_name="${file##*/}"
-              cp "${file}" "upload/${board_name}-${base_name}"
+              cp "${file}" "upload/bins/${board_name}-${base_name}"
             done
           done
-          if [ -z "$(ls -A upload)" ]; then
+          if [ -z "$(ls -A upload/bins)" ]; then
             echo "No firmware files collected" >&2
             exit 1
           fi
@@ -119,6 +119,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for file in upload/*; do
-            gh release upload "${RELEASE_TAG}" "$file" --clobber
+          for file in upload/bins/*; do
+            base_name="${file##*/}"
+            gh release upload "${RELEASE_TAG}" "$file" --clobber --name "bins/${base_name}"
           done
