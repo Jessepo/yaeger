@@ -1,0 +1,124 @@
+name: Build firmware for releases
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  determine-boards:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.collect.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect PlatformIO environments
+        id: collect
+        run: |
+          python - <<'PY'
+          import configparser
+          import json
+          import os
+
+          config = configparser.ConfigParser()
+          config.read('platformio.ini')
+
+          environments = [section.split('env:', 1)[1]
+                          for section in config.sections()
+                          if section.startswith('env:')]
+
+          if not environments:
+              raise SystemExit('No PlatformIO environments found to build')
+
+          matrix = json.dumps({"board": environments})
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+              fh.write(f"matrix={matrix}\n")
+          PY
+
+  build:
+    needs: determine-boards
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.determine-boards.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio
+
+      - uses: actions/setup-node@v4.1.0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Build webUI
+        run: cd miniweb && npm i && npm run build
+
+      - name: Install PlatformIO Core
+        run: pip install --upgrade platformio
+
+      - name: Build PlatformIO Project
+        run: |
+          pio run -e ${{ matrix.board }}
+          pio run -e ${{ matrix.board }} -t buildfs
+
+      - name: Prepare firmware artifacts
+        run: |
+          mkdir -p release/${{ matrix.board }}
+          cp .pio/build/${{ matrix.board }}/firmware.bin release/${{ matrix.board }}/firmware.bin
+          cp .pio/build/${{ matrix.board }}/spiffs.bin release/${{ matrix.board }}/spiffs.bin
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.board }}
+          path: release/${{ matrix.board }}
+          if-no-files-found: error
+
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: firmware
+
+      - name: Collect firmware files
+        run: |
+          set -euo pipefail
+          mkdir -p upload
+          shopt -s nullglob
+          for board_dir in firmware/*; do
+            board_name="${board_dir##*/}"
+            board_name="${board_name#firmware-}"
+            for file in "${board_dir}"/*.bin; do
+              base_name="${file##*/}"
+              cp "${file}" "upload/${board_name}-${base_name}"
+            done
+          done
+          if [ -z "$(ls -A upload)" ]; then
+            echo "No firmware files collected" >&2
+            exit 1
+          fi
+
+      - name: Upload assets to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for file in upload/*; do
+            gh release upload "${RELEASE_TAG}" "$file" --clobber
+          done
