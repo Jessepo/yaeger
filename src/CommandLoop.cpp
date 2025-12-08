@@ -69,18 +69,28 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
 
     // Send Values to Artisan over Websocket
     const char *command = doc["command"].as<const char *>();
-    if (command != NULL && strncmp(command, "getData", 7) == 0) {
-      JsonObject root = doc.to<JsonObject>();
-      JsonObject data = root.createNestedObject("data");
-      root["id"] = ln_id;
-      float etbt[3];
-      getETBTReadings(etbt);
-      data["ET"] = etbt[0]; // Med_ExhaustTemp.getMedian()
-      data["BT"] = etbt[1]; // Med_BeanTemp.getMedian();
-      data["Amb"] = etbt[2];
-      data["BurnerVal"] = getHeaterPower(); // float(DimmerVal);
-      data["FanVal"] = getFanSpeed();
+    if (command != NULL && strncmp(command, "setBurner", 9) == 0) {
+      long val = doc["value"].as<long>();
+      logf("BurnerVal: %d\n", val);
+      setHeaterPower(val);
     }
+    if (command != NULL && strncmp(command, "setFan", 6) == 0) {
+      long val = doc["value"].as<long>();
+      logf("FanVal: %d\n", val);
+      setFanSpeed(val);
+    }
+    // if (command != NULL && strncmp(command, "getData", 7) == 0) {
+    JsonObject root = doc.to<JsonObject>();
+    JsonObject data = root.createNestedObject("data");
+    root["id"] = ln_id;
+    float etbt[3];
+    getETBTReadings(etbt);
+    data["ET"] = etbt[0]; // Med_ExhaustTemp.getMedian()
+    data["BT"] = etbt[1]; // Med_BeanTemp.getMedian();
+    data["Amb"] = etbt[2];
+    data["BurnerVal"] = getHeaterPower(); // float(DimmerVal);
+    data["FanVal"] = getFanSpeed();
+    // }
 
     char buffer[200];                        // create temp buffer
     size_t len = serializeJson(doc, buffer); // serialize to buffer
