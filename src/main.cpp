@@ -101,10 +101,12 @@ void setup(void) {
   initHeater();
 }
 
+
 void loop(void) {
   ElegantOTA.loop();
   ws.cleanupClients();
   delay(10);
   takeReadings();
   updateHeater();
+  updateDisplay(); // add this
 }
