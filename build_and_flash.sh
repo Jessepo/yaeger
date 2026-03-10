@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # The script will build and flash Yaeger to your ESP device.
 # Ensure this script is executable (`chmod +x build_and_flash.sh`) and has the correct permissions.
 #
@@ -11,7 +10,7 @@
 #   ./build_and_flash.sh s3-mini # For ESP32-S3 Mini
 #
 # If you cloned the project from GitHub, ensure all folders have the correct permissions:
-#   chmod -R u+rwX .
+#   dc
 # The SPIFFS filesystem might fail if permissions are incorrect.
 
 # Step 0: Check for required parameter (s3 or s3-mini)
@@ -22,7 +21,10 @@ fi
 
 PIO_ENV="esp32-$1"
 
+# Add PlatformIO to PATH
+export PATH=$PATH:"$USERPROFILE/.platformio/penv/Scripts"
 # Validate the provided environment
+
 if [[ "$PIO_ENV" != "esp32-s3" && "$PIO_ENV" != "esp32-s3-mini" ]]; then
     echo "Invalid argument: '$1'. Use 's3' or 's3-mini'."
     exit 1
