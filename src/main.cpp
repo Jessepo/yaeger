@@ -19,6 +19,10 @@
 #include "sensors.h"
 #include "wifi_setup.h"
 
+#include "leds.h"
+
+
+
 #define PIN 48
 Adafruit_NeoPixel pixels(1, PIN);
 // for ota
@@ -91,18 +95,28 @@ void setup(void) {
   // WebSocket handler
   setupMainLoop(&ws);
   server.addHandler(&ws);
+  
+  initLeds();
+  initAnimation();
 
-  // API
-  setupApi(&server);
+	// API
+	setupApi(&server);
 
   server.begin();
   log("HTTP server started");
   pixels.clear();
-  pixels.setPixelColor(0, pixels.Color(0, 5, 0));
+  pixels.setPixelColor(0, pixels.Color(0, 4, 0));
   pixels.show();
+  
 
   initFan();
   initHeater();
+
+ 
+  
+
+ 
+
 }
 
 
@@ -113,4 +127,5 @@ void loop(void) {
   takeReadings();
   updateHeater();
   updateDisplay(); // add this
+  updateLeds();
 }
