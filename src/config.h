@@ -17,6 +17,7 @@
 #define DISPLAY_CL 42
 
 #else
+#define ARGB_PIN 4
 
 #define FAN_PIN 8
 

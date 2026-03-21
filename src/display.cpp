@@ -31,6 +31,7 @@ void setWifiIP() {
   display.setCursor(0, 16);
   display.print("IP: ");
   display.println(WiFi.localIP());
+  delay(3000); // Show IP for 3 seconds before switching to main display
   display.display();
 }
 
@@ -75,6 +76,7 @@ void updateDisplay() {
   display.print("Fan:    ");
   display.print(getFanSpeed());
   display.print("%");
+
 
   display.display();
 }
