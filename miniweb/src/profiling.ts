@@ -10,7 +10,7 @@ const profileName = van.state("");
 export function followProfile(
   profile: Profile,
   roast: RoastState,
-): number | undefined {
+): { setPoint: number, fanValue?: number } | undefined {
   if (!roast.startDate) return undefined;
 
   const elapsedTime = (new Date().getTime() - roast.startDate.getTime()) / 1000; // Elapsed time in seconds
@@ -28,25 +28,31 @@ export function followProfile(
         stepStartTime === 0
           ? profile.steps[0].setpoint
           : profile.steps.find((s, i) => profile.steps[i + 1] === step)
-              ?.setpoint || step.setpoint;
+            ?.setpoint || step.setpoint;
       const nextSetpoint = step.setpoint;
 
-      return (
-        Math.floor(
-          interpolateSetpoint(
-            prevSetpoint,
-            nextSetpoint,
-            progress,
-            step.interpolation,
-          ) * 10,
-        ) / 10
-      );
+      return {
+        setPoint: (
+          Math.floor(
+            interpolateSetpoint(
+              prevSetpoint,
+              nextSetpoint,
+              progress,
+              step.interpolation,
+            ) * 10,
+          ) / 10
+        ),
+        fanValue: step.fanValue
+      };
     }
   }
 
   // If no valid step is found, return last setpoint
   return profile.steps.length > 0
-    ? profile.steps[profile.steps.length - 1].setpoint
+    ? {
+      setPoint: profile.steps[profile.steps.length - 1].setpoint,
+      fanValue: profile.steps[profile.steps.length - 1].fanValue
+    }
     : undefined;
 }
 
@@ -67,9 +73,9 @@ function interpolateSetpoint(
       return (
         start +
         (end - start) *
-          (progress < 0.5
-            ? 2 * Math.pow(progress, 2)
-            : 1 - Math.pow(-2 * progress + 2, 2) / 2)
+        (progress < 0.5
+          ? 2 * Math.pow(progress, 2)
+          : 1 - Math.pow(-2 * progress + 2, 2) / 2)
       );
     default:
       return end;
