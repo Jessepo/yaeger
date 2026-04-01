@@ -1,20 +1,22 @@
 
 #include <Adafruit_NeoPixel.h>
+#include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 #include <ElegantOTA.h> //https://github.com/ayushsharma82/AsyncElegantOTA
-#include <SPIFFS.h>
+#include <LittleFS.h>
 
+#include "AsyncWebSocket.h"
 #include "CommandLoop.h"
 #include "HardwareSerial.h"
 #include "IPAddress.h"
 #include "WiFiType.h"
+#include "api.h"
 #include "config.h"
 #include "display.h"
 #include "fan.h"
 #include "heater.h"
 #include "logging.h"
 #include "sensors.h"
-#include "api.h"
 #include "wifi_setup.h"
 
 #include "leds.h"
@@ -30,6 +32,9 @@ const char *host = "esp32 Roaster";
 // Create a WebSocket object
 AsyncWebSocket ws("/ws");
 AsyncWebServer server(80);
+
+void setupSimulation(AsyncWebSocket *ws);
+void updateSimulation();
 
 unsigned long ota_progress_millis = 0;
 void onOTAStart() {
@@ -74,10 +79,10 @@ void setup(void) {
   initDisplay();
   setWifiIP();
 
-  if (!SPIFFS.begin()) {
-    Serial.println("SPIFFS failed");
+  if (!LittleFS.begin(true)) {
+    Serial.println("LittleFS failed");
   }
-  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+  server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 
   ElegantOTA.begin(&server); // Start ElegantOTA
   // ElegantOTA callbacks
@@ -93,9 +98,8 @@ void setup(void) {
   
   initLeds();
   initAnimation();
-
-	// API
-	setupApi(&server);
+  // API
+  setupApi(&server);
 
   server.begin();
   log("HTTP server started");
