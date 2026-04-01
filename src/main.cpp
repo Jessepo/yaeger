@@ -87,6 +87,8 @@ void setup(void) {
     Serial.println("LittleFS failed");
   }
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
+  server.serveStatic("/settings", LittleFS, "/").setDefaultFile("index.html");
+  server.serveStatic("/editor", LittleFS, "/").setDefaultFile("index.html");
 
   ElegantOTA.begin(&server); // Start ElegantOTA
   // ElegantOTA callbacks

@@ -6,6 +6,10 @@
 #include <ESPAsyncWebServer.h>
 #include <cmath>
 #include <cstring>
+#include <Preferences.h>
+
+Preferences preferences;
+
 
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
                AwsEventType type, void *arg, uint8_t *data, size_t len) {
@@ -20,7 +24,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     logf("[%u] Disconnected!\n", client->id());
     // turn off heater and set fan to 100%
     setHeaterPower(0);
-    setFanSpeed(40);
+    setFanSpeed(preferences.getLong("coolFanSpeed", 65));
   } break;
   case WS_EVT_DATA: {
 
@@ -80,17 +84,54 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
       setFanSpeed(val);
     }
 
+    // Safeguard to prevent heater fuse blowout
+    if (getHeaterPower() > 0  && getFanSpeed() <= 30) {
+       setFanSpeed(30);
+    }
+
+    if (command != NULL && strncmp(command, "setPreferences", 14) == 0) {
+      if (!doc["pidKp"].isNull()) {
+        double pidKp = doc["pidKp"].as<double>();
+        preferences.putDouble("pidKp", pidKp);
+      }
+      if (!doc["pidKi"].isNull()) {
+        double pidKi = doc["pidKi"].as<double>();
+        preferences.putDouble("pidKi", pidKi);
+      }
+      if (!doc["pidKd"].isNull()) {
+        double pidKd = doc["pidKd"].as<double>();
+        preferences.putDouble("pidKd", pidKd);
+      }
+      if (!doc["cooldownFanSpeed"].isNull()) {
+        long cooldownFanSpeed = doc["cooldownFanSpeed"].as<long>();
+        logf("cooldownFanSpeed: %d\n", cooldownFanSpeed);
+        preferences.putLong("coolFanSpeed", cooldownFanSpeed);
+      }
+    }
+
+    if (command != NULL && (strncmp(command, "setPreferences", 14) == 0 || strncmp(command, "getPreferences", 14) == 0)) {
+      JsonObject root = doc.to<JsonObject>();
+      JsonObject data = root.createNestedObject("data");
+      root["id"] = ln_id;
+      data["type"] = "preferences";
+      data["pidKp"] = preferences.getDouble("pidKp", 1.0);
+      data["pidKi"] = preferences.getDouble("pidKi", 0.1);
+      data["pidKd"] = preferences.getDouble("pidKd", 0.01);
+      data["cooldownFanSpeed"] = preferences.getLong("coolFanSpeed", 65);
+    }
+
     if (command != NULL && strncmp(command, "getData", 7) == 0) {
-    JsonObject root = doc.to<JsonObject>();
-    JsonObject data = root.createNestedObject("data");
-    root["id"] = ln_id;
-    float etbt[3];
-    getETBTReadings(etbt);
-    data["ET"] = etbt[0]; // Med_ExhaustTemp.getMedian()
-    data["BT"] = etbt[1]; // Med_BeanTemp.getMedian();
-    data["Amb"] = etbt[2];
-    data["BurnerVal"] = getHeaterPower(); // float(DimmerVal);
-    data["FanVal"] = getFanSpeed();
+      JsonObject root = doc.to<JsonObject>();
+      JsonObject data = root.createNestedObject("data");
+      root["id"] = ln_id;
+      float etbt[3];
+      getETBTReadings(etbt);
+      data["type"] = "status";
+      data["ET"] = etbt[0]; // Med_ExhaustTemp.getMedian()
+      data["BT"] = etbt[1]; // Med_BeanTemp.getMedian();
+      data["Amb"] = etbt[2];
+      data["BurnerVal"] = getHeaterPower(); // float(DimmerVal);
+      data["FanVal"] = getFanSpeed();
     }
 
     char buffer[200];                        // create temp buffer
@@ -112,4 +153,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
   }
 }
 
-void setupMainLoop(AsyncWebSocket *ws) { ws->onEvent(onWsEvent); }
+void setupMainLoop(AsyncWebSocket *ws) {
+  preferences.begin("preferences");
+  ws->onEvent(onWsEvent);
+}
