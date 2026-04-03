@@ -20,7 +20,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     logf("[%u] Disconnected!\n", client->id());
     // turn off heater and set fan to 100%
     setHeaterPower(0);
-    setFanSpeed(100);
+    setFanSpeed(40);
   } break;
   case WS_EVT_DATA: {
 

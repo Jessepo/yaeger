@@ -108,6 +108,7 @@ void setup(void) {
   server.begin();
   log("HTTP server started");
   pixels.clear();
+  
   pixels.setPixelColor(0, pixels.Color(0, 4, 0));
   pixels.show();
   
