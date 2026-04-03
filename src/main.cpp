@@ -23,6 +23,10 @@
 
 
 
+#include "leds.h"
+
+
+
 #define PIN 48
 Adafruit_NeoPixel pixels(1, PIN);
 // for ota
@@ -98,9 +102,8 @@ void setup(void) {
   
   initLeds();
   initAnimation();
-
-	// API
-	setupApi(&server);
+  // API
+  setupApi(&server);
 
   server.begin();
   log("HTTP server started");
