@@ -4,7 +4,7 @@
 
 #define LED_PIN 4
 #define LED_COUNT 8
-#define BT_START 15.0f
+#define BT_START 20.0f
 #define BT_END 215.0f
 #define ET_WARNING 400.0f
 
