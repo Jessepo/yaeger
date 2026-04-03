@@ -104,6 +104,7 @@ void setup(void) {
   
   initLeds();
   initAnimation();
+  
   // API
   setupApi(&server);
 

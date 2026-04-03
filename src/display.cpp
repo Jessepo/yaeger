@@ -50,7 +50,7 @@ void updateDisplay() {
   display.setTextSize(2);
   display.setCursor(0, 18);  // moved down 8px
   display.print(etbt[0], 1);
-  display.print("C");
+ 
 
   // BT
   display.setTextSize(2);  // bigger header
@@ -60,7 +60,7 @@ void updateDisplay() {
   display.setTextSize(2);
   display.setCursor(70, 18);  // moved down 8px
   display.print(etbt[1], 1);
-  display.print("C");
+  
 
   // Divider
   display.drawLine(0, 35, 128, 35, SSD1306_WHITE);
