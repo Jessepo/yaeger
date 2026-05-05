@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <Preferences.h>
+#include <WiFi.h>
 
 #include "config.h"
 #include "preferenceKeys.h"
@@ -29,7 +30,7 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
     case WS_EVT_DISCONNECT: {
       logf("[%u] Disconnected!\n", client->id());
       // turn off heater and set fan to 100% when not under PID control
-      if (this->control->getMode() == OperationalMode::Manual) {
+      if (this->control->getMode() == OperationalMode::Manual && control->getHeater() > 0.f) {
         control->setHeater(0.f);
         control->setFan(100.f);
       }
@@ -191,12 +192,10 @@ void WSRequestHandler::loop() {
   resultData["pidKp"] = control->getKp();
   resultData["pidKi"] = control->getKi();
   resultData["pidKd"] = control->getKd();
+  resultData["wifiStrength"] = WiFi.RSSI();
 
-  char buffer[300]; // create temp buffer
-  serializeJson(doc, buffer); // serialize to buffer
-  // DEBUG WEBSOCKET
-  if (DEBUG) log(buffer);
-
-  this->ws->textAll(buffer);
+  String output;
+  serializeJson(doc, output);
+  this->ws->textAll(output);
   this->_lastUpdate = millis();
 }
