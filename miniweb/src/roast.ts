@@ -32,6 +32,13 @@ const pidIFactor = van.state(0.1);
 const pidDFactor = van.state(0.01);
 var pid = new PIDController(1.0, 0.1, 0.01);
 
+// Saved roasts storage
+interface SavedRoast {
+  name: string;
+  size: number;
+}
+const savedRoasts = van.state<SavedRoast[]>([]);
+
 // Chart.js setup
 const chartElement = canvas({ id: "liveChart" });
 const ctx = chartElement.getContext("2d") as CanvasRenderingContext2D;
@@ -87,7 +94,7 @@ van.derive(() => {
 
     if (
       state.val.roast != null &&
-      state.val.currentState.status == RoasterStatus.roasting
+      (state.val.currentState.status == RoasterStatus.roasting || state.val.roast.measurements.length > 0)
     ) {
       console.log("Processing roast state update");
       const newMeasurement: [Measurement] = [
@@ -259,6 +266,51 @@ var DownloadButton = () => {
   );
 };
 
+const SaveToDeviceButton = () => {
+  const saveStatus = van.state("");
+  return div(
+    button(
+      {
+        onclick: async () => {
+          if (!state.val.roast || state.val.roast.measurements.length === 0) {
+            alert("No roast data to save");
+            return;
+          }
+          
+          const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "-");
+          const roastName = `roast-${timestamp}`;
+          
+          saveStatus.val = "Saving...";
+          
+          try {
+            const response = await fetch(`/api/roast/save?name=${encodeURIComponent(roastName)}`, {
+              method: "POST",
+              body: JSON.stringify(state.val.roast),
+              headers: { "Content-Type": "application/json" },
+            });
+            
+            if (response.ok) {
+              saveStatus.val = "✓ Saved!";
+              loadSavedRoasts();
+              setTimeout(() => { saveStatus.val = ""; }, 2000);
+            } else {
+              saveStatus.val = "✗ Save failed";
+              setTimeout(() => { saveStatus.val = ""; }, 2000);
+            }
+          } catch (error) {
+            console.error("Save error:", error);
+            saveStatus.val = "✗ Error";
+            setTimeout(() => { saveStatus.val = ""; }, 2000);
+          }
+        },
+        disabled: () => state.val.currentState.status !== RoasterStatus.idle || (state.val.roast?.measurements.length ?? 0) === 0,
+      },
+      "💾 Save to Device",
+    ),
+    () => saveStatus.val ? div({ style: "font-size: 0.75rem; color: #14b8a6; margin-top: 0.25rem;" }, saveStatus.val) : null,
+  );
+};
+
 const UploadButton = () => {
   return button(
     {
@@ -281,11 +333,11 @@ const RoastTime = () => {
 };
 
 function dateReviver(key: string, value: any): any {
-  if (
-    typeof value === "string" &&
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(value)
-  ) {
-    return new Date(value);
+  if (typeof value === "string") {
+    // Match ISO 8601 dates with various formats
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
+      return new Date(value);
+    }
   }
   return value;
 }
@@ -307,16 +359,30 @@ const UploadRoastInput = () => {
     reader.onload = (e) => {
       try {
         console.log("reading: ", e.target?.result);
-        const jsonData = JSON.parse(e.target?.result as string, dateReviver);
-        console.log(typeof jsonData);
-        console.log(jsonData as RoastState);
+        const jsonData = JSON.parse(e.target?.result as string, dateReviver) as RoastState;
+        
+        // Ensure all timestamps are Date objects
+        if (jsonData.measurements) {
+          jsonData.measurements = jsonData.measurements.map((m) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
+          }));
+        }
+        if (jsonData.startDate) {
+          jsonData.startDate = new Date(jsonData.startDate);
+        }
+        
+        console.log("Loaded roast data:", jsonData);
         state.val = {
           ...state.val,
           roast: jsonData,
         };
+        console.log("Updating chart with loaded data");
         updateChart(chart, state.val.roast!);
+        console.log("Chart updated");
       } catch (error) {
-        console.log("upload failed:", error);
+        console.error("upload failed:", error);
+        alert(`Failed to load roast file: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     };
     reader.readAsText(file);
@@ -348,6 +414,114 @@ let tempD = pidDFactor.val;
 
 let tempTarget = "BT";
 const pidEnabled = van.state(true);
+
+// Load saved roasts from device
+async function loadSavedRoasts() {
+  try {
+    const response = await fetch("/api/roast/list");
+    if (response.ok) {
+      const data = await response.json();
+      savedRoasts.val = data.roasts || [];
+    }
+  } catch (error) {
+    console.error("Failed to load saved roasts:", error);
+  }
+}
+
+// Load a roast from device storage
+async function loadRoastFromDevice(roastName: string) {
+  try {
+    const response = await fetch(`/api/roast/load?name=${encodeURIComponent(roastName)}`);
+    if (response.ok) {
+      const jsonData = await response.json();
+      
+      // Ensure all timestamps are Date objects
+      if (jsonData.measurements) {
+        jsonData.measurements = jsonData.measurements.map((m: any) => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
+        }));
+      }
+      if (jsonData.startDate) {
+        jsonData.startDate = new Date(jsonData.startDate);
+      }
+      
+      state.val = {
+        ...state.val,
+        roast: jsonData,
+      };
+      updateChart(chart, state.val.roast!);
+      console.log("Loaded roast from device:", roastName);
+    } else {
+      alert("Failed to load roast");
+    }
+  } catch (error) {
+    console.error("Failed to load roast:", error);
+    alert("Error loading roast");
+  }
+}
+
+// Delete a roast from device storage
+async function deleteRoastFromDevice(roastName: string) {
+  if (!confirm(`Delete "${roastName}"?`)) return;
+  
+  try {
+    const response = await fetch(`/api/roast/delete?name=${encodeURIComponent(roastName)}`, {
+      method: "DELETE",
+    });
+    
+    if (response.ok) {
+      loadSavedRoasts();
+      console.log("Deleted roast:", roastName);
+    } else {
+      alert("Failed to delete roast");
+    }
+  } catch (error) {
+    console.error("Failed to delete roast:", error);
+  }
+}
+
+// Component to display saved roasts
+const SavedRoastsList = () => {
+  van.derive(() => {
+    // Load roasts on mount
+    if (savedRoasts.val.length === 0) {
+      loadSavedRoasts();
+    }
+  });
+  
+  return div(
+    { class: "sidebar-section" },
+    div({ class: "sidebar-title" }, "Saved Roasts"),
+    () => 
+      savedRoasts.val.length === 0
+        ? div({ style: "font-size: 0.875rem; color: var(--text-muted);" }, "No saved roasts")
+        : div(
+            { style: "display: flex; flex-direction: column; gap: 0.5rem;" },
+            ...savedRoasts.val.map((roast) =>
+              div(
+                { style: "display: flex; gap: 0.5rem; font-size: 0.8125rem;" },
+                button(
+                  {
+                    onclick: () => loadRoastFromDevice(roast.name),
+                    style: "flex: 1; padding: 0.375rem; font-size: 0.75rem;",
+                  },
+                  roast.name,
+                ),
+                button(
+                  {
+                    onclick: () => {
+                      deleteRoastFromDevice(roast.name);
+                    },
+                    style: "padding: 0.375rem 0.5rem; background: #ef4444; font-size: 0.75rem;",
+                  },
+                  "✕",
+                ),
+              ),
+            ),
+          ),
+  );
+};
 
 const PIDConfig = () =>
   div(
@@ -441,155 +615,186 @@ function controlHeater() {
   slider2Value.val = heaterPower; // Reflect change in the UI
 }
 
-// UI creation
+// UI creation - Sidebar Layout
 const createApp = () => div(
+  { class: "roast-container" },
+  // Main content area with graph
   div(
-    span(
-      button(
-        {
-          onclick: () => toggleRoastStart(),
-        },
-        () => {
-          console.log("Status button render:", state.val.currentState.status);
-          return state.val.currentState.status == RoasterStatus.idle
-            ? "Start"
-            : "Stop";
-        },
-      ),
-      DownloadButton,
-      UploadButton,
-      "Roast time: ",
-      () => {
-        console.log("Roast time render:", state.val.roast);
-        return state.val.roast != undefined ? RoastTime() : "00:00";
-      },
-    ),
-  ),
-  chartElement,
-  div({class: 'control_cluster'},
-    SetpointControl,
+    { class: "roast-main" },
+    // Header with status and controls
     div(
-      "FAN 1:",
-      () => {
-        console.log("Fan slider render:", slider1Value.val);
-        return slider1Value.val;
-      },
-      "%",
-      input({
-        type: "range",
-        min: "0",
-        max: "100",
-        step: "5",
-        value: () => {
-          console.log("Fan slider value render:", slider1Value.val);
-          return slider1Value.val;
-        },
-        oninput: (e: Event) => {
-          const target = e.target as HTMLInputElement;
-          slider1Value.val = parseInt(target.value, 10);
-          onSliderChange("slider1", slider1Value.val);
-        },
-      }),
+      { class: "roast-header" },
+      div(
+        { class: "roast-status" },
+        button(
+          {
+            onclick: () => toggleRoastStart(),
+          },
+          () => {
+            return state.val.currentState.status == RoasterStatus.idle
+              ? "🔥 Start"
+              : "⏹ Stop";
+          },
+        ),
+        span(
+          { class: "roast-time" },
+          () => {
+            return state.val.roast != undefined ? RoastTime() : "00:00";
+          },
+        ),
+      ),
+      div(
+        { style: "display: flex; gap: 0.5rem; flex-wrap: wrap;" },
+        DownloadButton,
+        SaveToDeviceButton,
+        UploadButton,
+      ),
     ),
+    // Chart
+    chartElement,
+  ),
+  // Sidebar with controls
+  div(
+    { class: "roast-sidebar" },
+    // Current readings
     div(
-      "HEATER:",
-      () => {
-        console.log("Heater slider render:", slider2Value.val);
-        return slider2Value.val;
-      },
-      "%",
-      input({
-        type: "range",
-        min: "0",
-        max: "100",
-        step: "5",
-        disabled: () => pidEnabled.val,
-        value: () => {
-          console.log("Heater slider value render:", slider2Value.val);
-          return slider2Value.val;
-        },
-        oninput: (e: Event) => {
-          const target = e.target as HTMLInputElement;
-          slider2Value.val = parseInt(target.value, 10);
-          onSliderChange("slider2", slider2Value.val);
-        },
-      }),
+      { class: "sidebar-section" },
+      div({ class: "sidebar-title" }, "Current Readings"),
+      div(
+        { class: "sensor-readout" },
+        div(
+          { class: "sensor-box" },
+          div({ class: "sensor-box-label" }, "Exhaust Temp"),
+          div(
+            { class: "sensor-box-value" },
+            () => `${currentMessage.val?.ET ?? "—"}°C`,
+          ),
+        ),
+        div(
+          { class: "sensor-box" },
+          div({ class: "sensor-box-label" }, "Bean Temp"),
+          div(
+            { class: "sensor-box-value" },
+            () => `${currentMessage.val?.BT ?? "—"}°C`,
+          ),
+        ),
+      ),
     ),
+    // Setpoint control
+    div(
+      { class: "sidebar-section" },
+      div(
+        { class: "sidebar-control" },
+        div({ class: "sidebar-label" }, "Setpoint (°C)"),
+        div(
+          { class: "sidebar-value" },
+          () => setpoint.val,
+        ),
+        input({
+          type: "range",
+          min: "0",
+          max: "300",
+          disabled: followProfileEnabled.val,
+          value: setpoint,
+          oninput: (e: Event) => {
+            setpoint.val = parseInt((e.target as HTMLInputElement).value, 10);
+          },
+        }),
+      ),
+    ),
+    // Fan control
+    div(
+      { class: "sidebar-section" },
+      div(
+        { class: "sidebar-control" },
+        div({ class: "sidebar-label" }, "Fan Power"),
+        div(
+          { class: "sidebar-value" },
+          () => `${slider1Value.val}%`,
+        ),
+        input({
+          type: "range",
+          min: "0",
+          max: "100",
+          step: "5",
+          value: () => slider1Value.val,
+          oninput: (e: Event) => {
+            const target = e.target as HTMLInputElement;
+            slider1Value.val = parseInt(target.value, 10);
+            onSliderChange("slider1", slider1Value.val);
+          },
+        }),
+      ),
+    ),
+    // Heater control
+    div(
+      { class: "sidebar-section" },
+      div(
+        { class: "sidebar-control" },
+        div({ class: "sidebar-label" }, "Heater Power"),
+        div(
+          { class: "sidebar-value" },
+          () => `${slider2Value.val}%`,
+        ),
+        input({
+          type: "range",
+          min: "0",
+          max: "100",
+          step: "5",
+          disabled: () => pidEnabled.val,
+          value: () => slider2Value.val,
+          oninput: (e: Event) => {
+            const target = e.target as HTMLInputElement;
+            slider2Value.val = parseInt(target.value, 10);
+            onSliderChange("slider2", slider2Value.val);
+          },
+        }),
+      ),
+    ),
+    // Event markers
+    div(
+      { class: "sidebar-section" },
+      div({ class: "sidebar-title" }, "Events"),
+      div(
+        { class: "event-buttons" },
+        button({ onclick: () => appendEvent("charge") }, "Charge"),
+        button({ onclick: () => appendEvent("dry-end") }, "Dry End"),
+        button(
+          { onclick: () => appendEvent("first-crack-start") },
+          "1st Crack",
+        ),
+        button(
+          { onclick: () => appendEvent("first-crack-end") },
+          "1st End",
+        ),
+        button(
+          { onclick: () => appendEvent("second-crack start") },
+          "2nd Crack",
+        ),
+        button(
+          { onclick: () => appendEvent("second-crack-end") },
+          "2nd End",
+        ),
+        button({ onclick: () => appendEvent("drop") }, "Drop"),
+      ),
+    ),
+    // PID section
+    div(
+      { class: "sidebar-section" },
+      div({ class: "sidebar-title" }, "PID Settings"),
+      PIDConfig,
+    ),
+    // Saved roasts
+    SavedRoastsList,
+    // Profile section
+    div(
+      { class: "sidebar-section" },
+      div({ class: "sidebar-title" }, "Profile"),
+      ProfileControl,
+    ),
+    // Upload input
+    UploadRoastInput,
   ),
-  div(
-    span(
-      button(
-        {
-          onclick: () => appendEvent("charge"),
-        },
-        "Charge",
-      ),
-      button(
-        {
-          onclick: () => appendEvent("dry-end"),
-        },
-        "Dry End",
-      ),
-      button(
-        {
-          onclick: () => appendEvent("first-crack-start"),
-        },
-        "First crack start",
-      ),
-      button(
-        {
-          onclick: () => appendEvent("first-crack-end"),
-        },
-        "First crack end",
-      ),
-      button(
-        {
-          onclick: () => appendEvent("second-crack start"),
-        },
-        "Second crack start",
-      ),
-      button(
-        {
-          onclick: () => appendEvent("second-crack-end"),
-        },
-        "Second crack end",
-      ),
-      button(
-        {
-          onclick: () => appendEvent("drop"),
-        },
-        "Drop",
-      ),
-    ),
-  ),
-  div(
-    span(
-      "ET: ",
-      () => {
-        console.log("ET render:", currentMessage.val?.ET);
-        return currentMessage.val?.ET ?? "N/A";
-      },
-      " ",
-      "BT: ",
-      () => {
-        console.log("BT render:", currentMessage.val?.BT);
-        return currentMessage.val?.BT ?? "N/A";
-      },
-    ),
-    " ",
-    p(
-      "Last update: ",
-      () => {
-        console.log("Last update render:", currentUpdate.val);
-        return currentUpdate.val?.toString() ?? "N/A";
-      },
-    ),
-  ),
-  UploadRoastInput,
-  p(),
-  PIDConfig,
-  p(),
-  ProfileControl,
 );
 
 function toggleRoastStart() {
