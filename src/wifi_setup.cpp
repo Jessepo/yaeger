@@ -111,7 +111,7 @@ void WiFiParams::init() {
 }
 
 void WiFiParams::reset() {
-  ssid = "";
-  pass = "";
+  ssid = "Rufusnet";
+  pass = "mowgliehayduke";
   preferences.clear();
 }
