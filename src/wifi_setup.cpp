@@ -1,3 +1,5 @@
+#include "wifi_setup.h"
+
 #include "WiFiType.h"
 #include "esp32-hal.h"
 #include "logging.h"
@@ -6,35 +8,48 @@
 #include <Preferences.h>
 #include <WiFi.h>
 
-const char *wifiPrefsKey = "wifi";
-const char *wifiSSIDKey = "ssid";
-const char *wifiPassKey = "pass";
+#include "config.h"
+#include "preferenceKeys.h"
+
 
 class WiFiParams {
 private:
-  String ssid = "";
-  String pass = "";
-  Preferences preferences;
+  Preferences *preferences;
 
 public:
-  String getSSID() { return ssid; }
-  String getPass() { return pass; }
-  bool hasCredentials() { return ssid != ""; };
-  void saveCredentials(String ssid, String pass);
-  void init();
-  void reset();
+  WiFiParams(Preferences *p);
+  ~WiFiParams() = default;
+
+  bool hasCredentials();
+   String getSSID();
+   String getPass();
 };
 
-WiFiParams params;
+WiFiParams::WiFiParams(Preferences *p) {
+  this->preferences = p;
+}
 
-void setupAP() {
+bool WiFiParams::hasCredentials() {
+  return this->preferences->isKey(wifiSSIDKey);
+}
+
+
+ String WiFiParams::getSSID() {
+  return this->preferences->getString(wifiSSIDKey, INITIAL_WIFI_SSID);
+}
+
+ String WiFiParams::getPass() {
+  return this->preferences->getString(wifiPassKey, INITIAL_WIFI_PASS);
+}
+
+void setupAP(WiFiParams params) {
   WiFi.mode(WIFI_AP);
   delay(100);
   WiFi.softAP("Yaeger");
   WiFi.setTxPower(WIFI_POWER_8_5dBm);
 }
 
-void connectToWifi() {
+void connectToWifi(WiFiParams params) {
   WiFi.mode(WIFI_STA);
 
   WiFi.begin(params.getSSID(), params.getPass());
@@ -43,16 +58,17 @@ void connectToWifi() {
   while (WiFi.status() != WL_CONNECTED) {
     if (WiFi.status() == WL_CONNECT_FAILED) {
       log("Connect failed, restoring AP");
-      setupAP();
+      setupAP(params);
       break;
     }
     wifiCounter++;
     delay(1000);
     log(".");
     if (wifiCounter > 10) {
+      log("No connection after 10 seconds, restoring AP");
       WiFi.disconnect(true);
       delay(100);
-      setupAP();
+      setupAP(params);
       break;
     }
   }
@@ -63,11 +79,8 @@ void connectToWifi() {
   log(WiFi.localIP().toString().c_str());
 }
 
-void setupWifi() {
-  // TODO: blink led
-  //
-
-  params.init();
+void setupWifi(Preferences *p) {
+  auto params = WiFiParams(p);
 
   const char *hostname = "yaeger.local";
   WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
@@ -75,10 +88,10 @@ void setupWifi() {
 
   if (params.hasCredentials()) {
     log("trying to connect to wifi");
-    connectToWifi();
+    connectToWifi(params);
   } else {
     log("no wifi data found, setting up AP");
-    setupAP();
+    setupAP(params);
   }
 
   if (!MDNS.begin("yaeger")) {
@@ -86,32 +99,3 @@ void setupWifi() {
   }
 }
 
-// ----------------------------------------------------
-// ------------------ WiFiParams ----------------------
-// ----------------------------------------------------
-
-// TODO: use this
-void WiFiParams::saveCredentials(String ssid, String pass) {
-  if (this->ssid == ssid && this->pass == pass)
-    return;
-
-  this->ssid = ssid;
-  this->pass = pass;
-  preferences.putString("ssid", ssid.c_str());
-  preferences.putString("pass", pass.c_str());
-  /*LOG_INFO("Saved wifi credentials [%s, %s]", ssid.c_str(), "*****");*/
-}
-
-void WiFiParams::init() {
-  preferences.begin(wifiPrefsKey);
-  if (!hasCredentials()) {
-    this->ssid = preferences.getString(wifiSSIDKey, "");
-    this->pass = preferences.getString(wifiPassKey, "");
-  }
-}
-
-void WiFiParams::reset() {
-  ssid = "Rufusnet";
-  pass = "mowgliehayduke";
-  preferences.clear();
-}

@@ -4,7 +4,7 @@
 
 void recvMsg(uint8_t *data, size_t len){
   WebSerial.println("Received Data...");
-	// TODO: can just map to char
+  // TODO: can just map to char
   String d = "";
   for(int i=0; i < len; i++){
     d += char(data[i]);
@@ -13,21 +13,23 @@ void recvMsg(uint8_t *data, size_t len){
 }
 
 void setupLogging(AsyncWebServer *server) {
-	WebSerial.begin(server);
+  Serial.begin(115200);
+  delay(1000); // Take some time to open up the Serial Monitor
+  WebSerial.begin(server);
   WebSerial.onMessage(recvMsg);
 }
 
 void log(const char *message) {
-	Serial.println(message);
-	WebSerial.println(message);
+  Serial.println(message);
+  WebSerial.println(message);
 }
 
 void logf(const char *format, ...) {
-	char buf[256];
-	va_list args;
-	va_start(args, format);
-	vsnprintf(buf, sizeof(buf), format, args);
-	va_end(args);
-	WebSerial.print(buf);
-	Serial.print(buf);
+  char buf[256];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(buf, sizeof(buf), format, args);
+  va_end(args);
+  WebSerial.print(buf);
+  Serial.print(buf);
 }

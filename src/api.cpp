@@ -1,6 +1,4 @@
 #include "logging.h"
-#include "sensors.h"
-#include "wifi_setup.h"
 #include <ESPAsyncWebServer.h>
 #include <Preferences.h>
 #include <SPIFFS.h>
@@ -9,20 +7,11 @@
 const char* ROASTS_DIR = "/spiffs/roasts";
 const int MAX_ROASTS = 5;
 
-void setupApi(AsyncWebServer *server) {
+#include "preferenceKeys.h"
+
+void setupApi(AsyncWebServer *server, Preferences *preferences) {
   log("setting up api");
-  
-  // Initialize SPIFFS if not already done
-  if (!SPIFFS.begin(true)) {
-    logf("SPIFFS Mount Failed");
-  }
-  
-  // Create roasts directory if it doesn't exist
-  if (!SPIFFS.exists(ROASTS_DIR)) {
-    SPIFFS.mkdir(ROASTS_DIR);
-  }
-  
-  server->on("/api/wifi", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server->on("/api/wifi", HTTP_GET, [preferences](AsyncWebServerRequest *request) {
     if (!request->hasParam("ssid") || !request->hasParam("pass")) {
       AsyncWebServerResponse *response = request->beginResponse(400);
       request->send(response);
@@ -32,13 +21,9 @@ void setupApi(AsyncWebServer *server) {
     const char *ssid = request->getParam("ssid")->value().c_str();
     const char *pass = request->getParam("pass")->value().c_str();
 
-    Preferences prefs;
-    prefs.begin(wifiPrefsKey, false);
-    prefs.putString(wifiSSIDKey, ssid);
-    prefs.putString(wifiPassKey, pass);
+    preferences->putString(wifiSSIDKey, ssid);
+    preferences->putString(wifiPassKey, pass);
     logf("saving to prefs, ssid: %s", ssid);
-
-    prefs.end();
     request->send(200);
   });
   

@@ -1,5 +1,6 @@
-#pragma once
+#ifndef DISPLAY_H
+#define DISPLAY_H
 
 void initDisplay();
 void setWifiIP();
-void updateDisplay(); // optional but useful for live temps later
+#endif // DISPLAY_H
