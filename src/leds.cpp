@@ -1,5 +1,5 @@
 #include "leds.h"
-#include "sensors.h"
+#include "Control.h"
 #include <Adafruit_NeoPixel.h>
 
 #define LED_PIN 4
@@ -71,11 +71,9 @@ void initLeds() {
   strip.show();
 }
 
-void updateLeds() {
-  float etbt[3];
-  getETBTReadings(etbt);
-  float bt = etbt[1];
-  float et = etbt[0];
+void updateLeds(Control *control) {
+  float bt = control->getBeanTemp();
+  float et = control->getExhaustTemp();
 
   // Check ET warning
   bool warning = et >= ET_WARNING;

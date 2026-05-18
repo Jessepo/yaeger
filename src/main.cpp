@@ -18,12 +18,6 @@
 
 #include "leds.h"
 
-
-
-#include "leds.h"
-
-
-
 #define PIN 48
 Adafruit_NeoPixel pixels(1, PIN);
 Control *control;
@@ -87,6 +81,8 @@ void setup() {
   if (!LittleFS.begin(true)) {
     Serial.println("LittleFS failed");
   }
+  if (!LittleFS.exists("/roasts")) LittleFS.mkdir("/roasts");
+  if (!LittleFS.exists("/profiles")) LittleFS.mkdir("/profiles");
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
   server.serveStatic("/settings", LittleFS, "/").setDefaultFile("index.html");
   server.serveStatic("/editor", LittleFS, "/").setDefaultFile("index.html");
@@ -131,6 +127,8 @@ void loop() {
   delay(10);
   control->loop();
   wsHandler->loop();
+  updateDisplay(control);
+  updateLeds(control);
   if (control->hasAutotuneResults()) {
     preferences.putFloat(pidPKey, control->getKp());
     preferences.putFloat(pidIKey, control->getKi());

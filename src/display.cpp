@@ -1,11 +1,9 @@
 #include "display.h"
 #include "config.h"
-#include "sensors.h"
+#include "Control.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
-#include "heater.h"
-#include "fan.h"
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -35,9 +33,10 @@ void setWifiIP() {
   display.display();
 }
 
-void updateDisplay() {
-  float etbt[3];
-  getETBTReadings(etbt);
+void updateDisplay(Control *control) {
+  static unsigned long lastUpdate = 0;
+  if (millis() - lastUpdate < 250) return;
+  lastUpdate = millis();
 
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
@@ -49,8 +48,8 @@ void updateDisplay() {
 
   display.setTextSize(2);
   display.setCursor(0, 18);  // moved down 8px
-  display.print(etbt[0], 1);
- 
+  display.print(control->getExhaustTemp(), 1);
+
 
   // BT
   display.setTextSize(2);  // bigger header
@@ -59,8 +58,8 @@ void updateDisplay() {
 
   display.setTextSize(2);
   display.setCursor(70, 18);  // moved down 8px
-  display.print(etbt[1], 1);
-  
+  display.print(control->getBeanTemp(), 1);
+
 
   // Divider
   display.drawLine(0, 35, 128, 35, SSD1306_WHITE);
@@ -69,12 +68,12 @@ void updateDisplay() {
   display.setTextSize(1);
   display.setCursor(0, 42);
   display.print("Heater: ");
-  display.print(getHeaterPower());
+  display.print(control->getHeater(), 0);
   display.print("%");
 
   display.setCursor(0, 54);
   display.print("Fan:    ");
-  display.print(getFanSpeed());
+  display.print(control->getFan(), 0);
   display.print("%");
 
 
