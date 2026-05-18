@@ -7,6 +7,13 @@ export type YaegerMessage = {
   FanVal: number;
   BurnerVal: number;
   id: number;
+  Setpoint?: number;
+  Target?: string;
+  Mode?: string;
+  pidKp?: number;
+  pidKi?: number;
+  pidKd?: number;
+  wifiStrength?: number;
 }
 
 export class YaegerState  {

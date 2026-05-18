@@ -1,25 +1,22 @@
 import "./style.css";
 import van from "vanjs-core";
-import { initializeChart, updateChart } from "./chart";
+import { initializeChart, updateChart, updateProfileLines } from "./chart";
 import {
-  YaegerMessage,
   YaegerState,
   Measurement,
   RoasterStatus,
   RoastState,
-  Profile,
 } from "./model.ts";
 import { getFormattedTimeDifference } from "./util.ts";
-import { PIDController } from "./pid.ts";
 import {
   followProfile,
   followProfileEnabled,
   profile,
   ProfileControl,
 } from "./profiling.ts";
-import { socket, lastMessage, lastUpdate } from "./websocket";
+import { socket, lastMessage, lastUpdate, connectionStatus } from "./websocket";
 
-const { label, button, div, input, select, option, canvas, p, span } = van.tags;
+const { label, button, div, input, span, h1, details, summary, header } = van.tags;
 
 // State variables
 const slider1Value = van.state(50);
@@ -30,7 +27,6 @@ const setpoint = van.state(20);
 const pidPFactor = van.state(1.0);
 const pidIFactor = van.state(0.1);
 const pidDFactor = van.state(0.01);
-var pid = new PIDController(1.0, 0.1, 0.01);
 
 // Saved roasts storage
 interface SavedRoast {
@@ -39,11 +35,23 @@ interface SavedRoast {
 }
 const savedRoasts = van.state<SavedRoast[]>([]);
 
-// Chart.js setup
-const chartElement = canvas({ id: "liveChart" });
-const ctx = chartElement.getContext("2d") as CanvasRenderingContext2D;
+// Dashboard state
+const currentROR = van.state<number | null>(null);
+const currentMode = van.state<"Manual" | "PID">("Manual");
+const currentTarget = van.state<"BT" | "ET">("BT");
+const fanOffset = van.state(0);
+const wifiSSID = van.state("");
+const wifiPass = van.state("");
+const wifiMessage = van.state("");
 
-const chart = initializeChart(ctx);
+// ECharts setup
+const chartElement = div({ id: "liveChart" });
+const chart = initializeChart(chartElement);
+
+// Redraw planned-profile lines whenever a profile is loaded/cleared
+van.derive(() => {
+  updateProfileLines(chart, profile.val);
+});
 
 // Add a derived state for current message
 const currentMessage = van.derive(() => {
@@ -79,7 +87,13 @@ van.derive(() => {
     });
     slider1Value.val = message.FanVal;
     slider2Value.val = message.BurnerVal;
-    
+
+    // Sync mode/target/setpoint from firmware
+    if (message.Mode === "PID" || message.Mode === "Auto") currentMode.val = "PID";
+    else if (message.Mode === "Manual") currentMode.val = "Manual";
+    if (message.Target === "BT" || message.Target === "ET") currentTarget.val = message.Target;
+    if (typeof message.Setpoint === "number") setpoint.val = message.Setpoint;
+
     // Create a new state object to ensure reactivity
     const newState = {
       ...state.val,
@@ -104,7 +118,7 @@ van.derive(() => {
           extra: {
             setpoint: setpoint.val,
             pidData: {
-              enabled: pidEnabled.val,
+              enabled: currentMode.val === "PID",
               kp: pidPFactor.val,
               ki: pidIFactor.val,
               kd: pidDFactor.val,
@@ -118,6 +132,19 @@ van.derive(() => {
         ...state.val.roast,
         measurements: [...state.val.roast.measurements, ...newMeasurement],
       };
+
+      // Compute current ROR from last 30s of BT history
+      const meas = newState.roast.measurements;
+      if (meas.length >= 5) {
+        const last = meas[meas.length - 1];
+        const cutoffMs = last.timestamp.getTime() - 30_000;
+        let firstIdx = meas.findIndex((m) => m.timestamp.getTime() >= cutoffMs);
+        if (firstIdx < 0) firstIdx = 0;
+        const first = meas[firstIdx];
+        const dt = (last.timestamp.getTime() - first.timestamp.getTime()) / 1000;
+        const dT = last.message.BT - first.message.BT;
+        currentROR.val = dt > 0 ? (dT / dt) * 60 : null;
+      }
 
       console.log("Updated roast state:", newState.roast);
 
@@ -137,12 +164,15 @@ van.derive(() => {
           console.log("Updating setpoint from profile:", profileUpdate.setPoint);
           setpoint.val = profileUpdate.setPoint;
           if (profileUpdate.fanValue != undefined) {
-            slider1Value.val = profileUpdate.fanValue!
-            updateFanPower(profileUpdate.fanValue!)
+            const adjusted = Math.max(
+              0,
+              Math.min(100, profileUpdate.fanValue + fanOffset.val),
+            );
+            slider1Value.val = adjusted;
+            updateFanPower(adjusted);
           }
         }
       }
-      controlHeater();
     }
 
     // Update state atomically
@@ -151,21 +181,6 @@ van.derive(() => {
     console.log("State updated:", state.val);
   }
 });
-
-// Slider change handler
-const onSliderChange = (slider: string, value: number) => {
-  console.log("slider: ", JSON.stringify({ slider, value }));
-  switch (slider) {
-    case "slider1":
-      updateFanPower(value);
-      break;
-    case "slider2":
-      updateHeaterPower(value);
-      break;
-    default:
-      break;
-  }
-};
 
 export function updateFanPower(value: number) {
   sendCommand({ id: 1, FanVal: value });
@@ -388,32 +403,13 @@ const UploadRoastInput = () => {
     reader.readAsText(file);
   });
 
-  return div(fileInput);
+  return fileInput;
 };
-
-// Update setpoint through a slider or input
-const SetpointControl = () =>
-  div(
-    "Setpoint (°C): ",
-    () => setpoint.val,
-    input({
-      type: "range",
-      min: "0",
-      max: "300",
-      disabled: followProfileEnabled.val,
-      value: setpoint,
-      oninput: (e: Event) => {
-        setpoint.val = parseInt((e.target as HTMLInputElement).value, 10);
-      },
-    }),
-  );
 
 let tempP = pidPFactor.val;
 let tempI = pidIFactor.val;
 let tempD = pidDFactor.val;
 
-let tempTarget = "BT";
-const pidEnabled = van.state(true);
 
 // Load saved roasts from device
 async function loadSavedRoasts() {
@@ -525,275 +521,413 @@ const SavedRoastsList = () => {
 
 const PIDConfig = () =>
   div(
-    "PID Factors",
-    p(),
-    "P:",
-    input({
-      type: "number",
-      value: tempP,
-      oninput: (e: Event) => {
-        tempP = parseFloat((e.target as HTMLInputElement).value) || 0;
-      },
-    }),
-    "I:",
-    input({
-      type: "number",
-      value: tempI,
-      oninput: (e: Event) => {
-        tempI = parseFloat((e.target as HTMLInputElement).value) || 0;
-      },
-    }),
-    "D:",
-    input({
-      type: "number",
-      value: tempD,
-      oninput: (e: Event) => {
-        tempD = parseFloat((e.target as HTMLInputElement).value) || 0;
-      },
-    }),
-    p(),
-    "Target:",
-    select(
-      {
-        value: tempTarget,
-        onchange: (e: Event) => {
-          tempTarget = (e.target as HTMLSelectElement).value;
+    { class: "pid-form" },
+    div(
+      { class: "pid-field" },
+      label({ class: "pid-label" }, "Kp"),
+      input({
+        type: "number",
+        class: "pid-input",
+        step: "0.01",
+        value: () => pidPFactor.val,
+        oninput: (e: Event) => {
+          tempP = parseFloat((e.target as HTMLInputElement).value) || 0;
         },
-      },
-      option({ value: "BT" }, "BT"),
-      option({ value: "ET" }, "ET"),
+      }),
     ),
-    p(),
+    div(
+      { class: "pid-field" },
+      label({ class: "pid-label" }, "Ki"),
+      input({
+        type: "number",
+        class: "pid-input",
+        step: "0.01",
+        value: () => pidIFactor.val,
+        oninput: (e: Event) => {
+          tempI = parseFloat((e.target as HTMLInputElement).value) || 0;
+        },
+      }),
+    ),
+    div(
+      { class: "pid-field" },
+      label({ class: "pid-label" }, "Kd"),
+      input({
+        type: "number",
+        class: "pid-input",
+        step: "0.001",
+        value: () => pidDFactor.val,
+        oninput: (e: Event) => {
+          tempD = parseFloat((e.target as HTMLInputElement).value) || 0;
+        },
+      }),
+    ),
     button(
       {
+        class: "pid-apply",
         onclick: () => {
           pidPFactor.val = tempP;
           pidIFactor.val = tempI;
           pidDFactor.val = tempD;
-
-          pid = new PIDController(
-            pidPFactor.val,
-            pidIFactor.val,
-            pidDFactor.val,
-          );
-          console.log("New PID values set:", {
-            P: pidPFactor.val,
-            I: pidIFactor.val,
-            D: pidDFactor.val,
+          sendCommand({
+            id: 1,
+            command: "setPreferences",
+            pidKp: tempP,
+            pidKi: tempI,
+            pidKd: tempD,
           });
-          console.log("PID:", JSON.stringify(pid));
         },
       },
-      "Apply pid",
-    ),
-    label(
-      input({
-        type: "checkbox",
-        checked: pidEnabled.val,
-        oninput: (e) => (pidEnabled.val = e.target.checked),
-      }),
-      "PID Enabled",
+      "Apply",
     ),
   );
 
-function controlHeater() {
-  let currentTemp: number;
-  if (tempTarget == "BT") {
-    currentTemp = state.val.currentState.lastMessage?.BT ?? 0;
-  } else {
-    currentTemp = state.val.currentState.lastMessage?.ET ?? 0;
-  }
-  const output = pid.compute(setpoint.val, currentTemp);
+// ============================================================================
+// Dashboard helpers
+// ============================================================================
 
-  // Clamp output to 0–100% range
-  const heaterPower = Math.min(100, Math.max(0, Math.round(output)));
-
-  if (pidEnabled.val == false) {
+async function updateWifi() {
+  const ssid = wifiSSID.val;
+  const pass = wifiPass.val;
+  if (!ssid.trim()) {
+    wifiMessage.val = "SSID required";
     return;
   }
-  updateHeaterPower(heaterPower);
-  slider2Value.val = heaterPower; // Reflect change in the UI
+  wifiMessage.val = "Saving…";
+  try {
+    const r = await fetch(
+      `/api/wifi?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`,
+    );
+    wifiMessage.val = r.ok
+      ? "Saved. Restart device to apply."
+      : `Error ${r.status}`;
+    if (r.ok) setTimeout(() => (wifiMessage.val = ""), 4000);
+  } catch (e) {
+    wifiMessage.val = `Error: ${(e as Error).message}`;
+  }
 }
 
-// UI creation - Sidebar Layout
-const createApp = () => div(
-  { class: "roast-container" },
-  // Main content area with graph
+function setMode(m: "Manual" | "PID") {
+  currentMode.val = m;
+  sendCommand({ id: 1, Mode: m });
+}
+
+function setTarget(t: "BT" | "ET") {
+  currentTarget.val = t;
+  sendCommand({ id: 1, Target: t });
+}
+
+function coolDown() {
+  setMode("Manual");
+  updateFanPower(100);
+  updateHeaterPower(0);
+  slider1Value.val = 100;
+  slider2Value.val = 0;
+}
+
+function fmtTemp(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  return `${v.toFixed(1)}°`;
+}
+
+const ReadingCard = (labelText: string, value: () => string, unit?: string) =>
   div(
-    { class: "roast-main" },
-    // Header with status and controls
+    { class: "reading-card" },
+    div({ class: "reading-label" }, labelText),
     div(
-      { class: "roast-header" },
+      { class: "reading-value" },
+      value,
+      unit ? span({ class: "reading-unit" }, unit) : null,
+    ),
+  );
+
+const Slider = (opts: {
+  label: string;
+  unit: string;
+  state: any;
+  min: number;
+  max: number;
+  step: number;
+  disabled?: () => boolean;
+  onChange: (v: number) => void;
+}) =>
+  div(
+    { class: "control" },
+    div(
+      { class: "control-header" },
+      span({ class: "control-label" }, opts.label),
+      span(
+        { class: "control-value" },
+        () => `${opts.state.val}${opts.unit}`,
+      ),
+    ),
+    input({
+      type: "range",
+      min: opts.min,
+      max: opts.max,
+      step: opts.step,
+      disabled: opts.disabled ?? false,
+      value: () => opts.state.val,
+      style: () => {
+        const pct = ((opts.state.val - opts.min) / (opts.max - opts.min)) * 100;
+        return `--fill: ${Math.min(100, Math.max(0, pct))}%`;
+      },
+      oninput: (e: Event) =>
+        opts.onChange(parseFloat((e.target as HTMLInputElement).value)),
+    }),
+  );
+
+// ============================================================================
+// Dashboard layout
+// ============================================================================
+
+const createApp = () => div(
+  { class: "dashboard" },
+
+  // --- Top bar ----------------------------------------------------------
+  header(
+    { class: "topbar" },
+    div(
+      { class: "topbar-brand" },
+      span({ class: "topbar-logo" }, "☕"),
+      h1({ class: "topbar-title" }, "Yaeger"),
+    ),
+    div(
+      { class: "topbar-status" },
+      span({
+        class: "conn-dot",
+        style: () =>
+          `background:${
+            connectionStatus.val === "Connected"
+              ? "var(--success)"
+              : connectionStatus.val === "Error"
+              ? "var(--danger)"
+              : "var(--warning)"
+          }`,
+      }),
+      span({ class: "conn-text" }, () => connectionStatus.val),
+    ),
+    div(
+      { class: "topbar-clock" },
+      () => (state.val.roast ? RoastTime() : "00:00"),
+    ),
+    div(
+      { class: "topbar-actions" },
+      button(
+        {
+          class: "btn-action btn-start",
+          disabled: () =>
+            state.val.currentState.status !== RoasterStatus.idle,
+          onclick: toggleRoastStart,
+        },
+        "Start Roast",
+      ),
+      button(
+        {
+          class: "btn-action btn-end",
+          disabled: () =>
+            state.val.currentState.status === RoasterStatus.idle,
+          onclick: toggleRoastStart,
+        },
+        "End Roast",
+      ),
+      button(
+        { class: "btn-action btn-cool", onclick: coolDown },
+        "Cool Down",
+      ),
+      button(
+        {
+          class: () =>
+            `btn-action btn-mode ${currentMode.val === "PID" ? "active" : ""}`,
+          onclick: () =>
+            setMode(currentMode.val === "Manual" ? "PID" : "Manual"),
+        },
+        () => (currentMode.val === "PID" ? "Auto" : "Manual"),
+      ),
+    ),
+  ),
+
+  // --- Main content: chart + right panel --------------------------------
+  div(
+    { class: "dashboard-main" },
+    div({ class: "chart-area" }, chartElement),
+    div(
+      { class: "side-panel" },
       div(
-        { class: "roast-status" },
-        button(
-          {
-            onclick: () => toggleRoastStart(),
-          },
-          () => {
-            return state.val.currentState.status == RoasterStatus.idle
-              ? "🔥 Start"
-              : "⏹ Stop";
-          },
-        ),
-        span(
-          { class: "roast-time" },
-          () => {
-            return state.val.roast != undefined ? RoastTime() : "00:00";
-          },
+        { class: "panel-section" },
+        div({ class: "panel-title" }, "Readings"),
+        div(
+          { class: "readings-grid" },
+          ReadingCard("Exhaust", () => fmtTemp(currentMessage.val?.ET), "C"),
+          ReadingCard("Bean", () => fmtTemp(currentMessage.val?.BT), "C"),
+          ReadingCard(
+            "ROR",
+            () => (currentROR.val != null ? currentROR.val.toFixed(1) : "—"),
+            "°C/min",
+          ),
+          ReadingCard("Setpoint", () => `${setpoint.val}`, "°C"),
         ),
       ),
       div(
-        { style: "display: flex; gap: 0.5rem; flex-wrap: wrap;" },
+        { class: "panel-section" },
+        div({ class: "panel-title" }, "Controls"),
+        () => {
+          const followingFan =
+            followProfileEnabled.val &&
+            profile.val != null &&
+            profile.val.steps.some((s) => s.fanValue != null);
+          return followingFan
+            ? Slider({
+                label: "Fan offset (vs profile)",
+                unit: "%",
+                state: fanOffset,
+                min: -25,
+                max: 25,
+                step: 5,
+                onChange: (v) => {
+                  fanOffset.val = v;
+                },
+              })
+            : Slider({
+                label: "Fan Power",
+                unit: "%",
+                state: slider1Value,
+                min: 0,
+                max: 100,
+                step: 5,
+                onChange: (v) => {
+                  slider1Value.val = v;
+                  updateFanPower(v);
+                },
+              });
+        },
+        Slider({
+          label: "Heater Power",
+          unit: "%",
+          state: slider2Value,
+          min: 0,
+          max: 100,
+          step: 5,
+          disabled: () => currentMode.val === "PID",
+          onChange: (v) => {
+            slider2Value.val = v;
+            updateHeaterPower(v);
+          },
+        }),
+        Slider({
+          label: "Setpoint",
+          unit: "°C",
+          state: setpoint,
+          min: 0,
+          max: 300,
+          step: 1,
+          disabled: () => followProfileEnabled.val,
+          onChange: (v) => {
+            setpoint.val = v;
+            sendCommand({ id: 1, Setpoint: v });
+          },
+        }),
+        div(
+          { class: "target-toggle" },
+          span({ class: "target-label" }, "Target"),
+          button(
+            {
+              class: () =>
+                `target-btn ${currentTarget.val === "BT" ? "active" : ""}`,
+              onclick: () => setTarget("BT"),
+            },
+            "BT",
+          ),
+          button(
+            {
+              class: () =>
+                `target-btn ${currentTarget.val === "ET" ? "active" : ""}`,
+              onclick: () => setTarget("ET"),
+            },
+            "ET",
+          ),
+        ),
+      ),
+      div(
+        { class: "panel-section" },
+        div({ class: "panel-title" }, "Events"),
+        div(
+          { class: "event-grid" },
+          button({ onclick: () => appendEvent("charge") }, "Charge"),
+          button({ onclick: () => appendEvent("dry-end") }, "Dry End"),
+          button(
+            { onclick: () => appendEvent("first-crack-start") },
+            "1st Crack",
+          ),
+          button(
+            { onclick: () => appendEvent("first-crack-end") },
+            "1st End",
+          ),
+          button(
+            { onclick: () => appendEvent("second-crack-start") },
+            "2nd Crack",
+          ),
+          button({ onclick: () => appendEvent("drop") }, "Drop"),
+        ),
+      ),
+    ),
+  ),
+
+  // --- Collapsible settings ---------------------------------------------
+  div(
+    { class: "settings-row" },
+    details(
+      { class: "settings-panel" },
+      summary({ class: "settings-summary" }, "PID Settings"),
+      PIDConfig,
+    ),
+    details(
+      { class: "settings-panel" },
+      summary({ class: "settings-summary" }, "WiFi"),
+      div(
+        { class: "wifi-form" },
+        input({
+          type: "text",
+          class: "form-input",
+          placeholder: "SSID",
+          oninput: (e: Event) =>
+            (wifiSSID.val = (e.target as HTMLInputElement).value),
+        }),
+        input({
+          type: "password",
+          class: "form-input",
+          placeholder: "Password",
+          oninput: (e: Event) =>
+            (wifiPass.val = (e.target as HTMLInputElement).value),
+        }),
+        button({ onclick: updateWifi }, "Save"),
+      ),
+      () =>
+        wifiMessage.val
+          ? div(
+              {
+                class: `status-message ${wifiMessage.val.startsWith("Error") ? "error" : "success"}`,
+              },
+              wifiMessage.val,
+            )
+          : null,
+    ),
+    details(
+      { class: "settings-panel" },
+      summary({ class: "settings-summary" }, "Profile"),
+      ProfileControl,
+    ),
+    details(
+      { class: "settings-panel" },
+      summary({ class: "settings-summary" }, "Saved Roasts"),
+      div(
+        { class: "roast-io" },
         DownloadButton,
         SaveToDeviceButton,
         UploadButton,
       ),
+      SavedRoastsList,
+      UploadRoastInput,
     ),
-    // Chart
-    chartElement,
-  ),
-  // Sidebar with controls
-  div(
-    { class: "roast-sidebar" },
-    // Current readings
-    div(
-      { class: "sidebar-section" },
-      div({ class: "sidebar-title" }, "Current Readings"),
-      div(
-        { class: "sensor-readout" },
-        div(
-          { class: "sensor-box" },
-          div({ class: "sensor-box-label" }, "Exhaust Temp"),
-          div(
-            { class: "sensor-box-value" },
-            () => `${currentMessage.val?.ET ?? "—"}°C`,
-          ),
-        ),
-        div(
-          { class: "sensor-box" },
-          div({ class: "sensor-box-label" }, "Bean Temp"),
-          div(
-            { class: "sensor-box-value" },
-            () => `${currentMessage.val?.BT ?? "—"}°C`,
-          ),
-        ),
-      ),
-    ),
-    // Setpoint control
-    div(
-      { class: "sidebar-section" },
-      div(
-        { class: "sidebar-control" },
-        div({ class: "sidebar-label" }, "Setpoint (°C)"),
-        div(
-          { class: "sidebar-value" },
-          () => setpoint.val,
-        ),
-        input({
-          type: "range",
-          min: "0",
-          max: "300",
-          disabled: followProfileEnabled.val,
-          value: setpoint,
-          oninput: (e: Event) => {
-            setpoint.val = parseInt((e.target as HTMLInputElement).value, 10);
-          },
-        }),
-      ),
-    ),
-    // Fan control
-    div(
-      { class: "sidebar-section" },
-      div(
-        { class: "sidebar-control" },
-        div({ class: "sidebar-label" }, "Fan Power"),
-        div(
-          { class: "sidebar-value" },
-          () => `${slider1Value.val}%`,
-        ),
-        input({
-          type: "range",
-          min: "0",
-          max: "100",
-          step: "5",
-          value: () => slider1Value.val,
-          oninput: (e: Event) => {
-            const target = e.target as HTMLInputElement;
-            slider1Value.val = parseInt(target.value, 10);
-            onSliderChange("slider1", slider1Value.val);
-          },
-        }),
-      ),
-    ),
-    // Heater control
-    div(
-      { class: "sidebar-section" },
-      div(
-        { class: "sidebar-control" },
-        div({ class: "sidebar-label" }, "Heater Power"),
-        div(
-          { class: "sidebar-value" },
-          () => `${slider2Value.val}%`,
-        ),
-        input({
-          type: "range",
-          min: "0",
-          max: "100",
-          step: "5",
-          disabled: () => pidEnabled.val,
-          value: () => slider2Value.val,
-          oninput: (e: Event) => {
-            const target = e.target as HTMLInputElement;
-            slider2Value.val = parseInt(target.value, 10);
-            onSliderChange("slider2", slider2Value.val);
-          },
-        }),
-      ),
-    ),
-    // Event markers
-    div(
-      { class: "sidebar-section" },
-      div({ class: "sidebar-title" }, "Events"),
-      div(
-        { class: "event-buttons" },
-        button({ onclick: () => appendEvent("charge") }, "Charge"),
-        button({ onclick: () => appendEvent("dry-end") }, "Dry End"),
-        button(
-          { onclick: () => appendEvent("first-crack-start") },
-          "1st Crack",
-        ),
-        button(
-          { onclick: () => appendEvent("first-crack-end") },
-          "1st End",
-        ),
-        button(
-          { onclick: () => appendEvent("second-crack start") },
-          "2nd Crack",
-        ),
-        button(
-          { onclick: () => appendEvent("second-crack-end") },
-          "2nd End",
-        ),
-        button({ onclick: () => appendEvent("drop") }, "Drop"),
-      ),
-    ),
-    // PID section
-    div(
-      { class: "sidebar-section" },
-      div({ class: "sidebar-title" }, "PID Settings"),
-      PIDConfig,
-    ),
-    // Saved roasts
-    SavedRoastsList,
-    // Profile section
-    div(
-      { class: "sidebar-section" },
-      div({ class: "sidebar-title" }, "Profile"),
-      ProfileControl,
-    ),
-    // Upload input
-    UploadRoastInput,
   ),
 );
 
