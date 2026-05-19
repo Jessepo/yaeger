@@ -5,56 +5,52 @@
 
 ---
 
-## 5. USB fallback for bad WiFi (planning only)
+## 5. Dedicated Raspberry Pi kiosk (planning only)
 
-Goal: when WiFi is flaky or absent, talk to the roaster over USB instead.
+Goal: a reliable, self-contained interface that doesn't depend on home WiFi or internet. The Pi becomes the network the ESP32 talks to, plus the screen the operator looks at.
 
-### Approach: Web Serial API
+### Key insight
 
-Browser-native API (`navigator.serial`). Chromium-only — Chrome/Edge/Opera, no Firefox/Safari. ESP32-S3 already has native USB CDC and shows up as a virtual COM port. Same JSON protocol the WebSocket uses, just over a USB byte stream. No protocol redesign.
+"Bad internet" wasn't really the problem — flaky home WiFi was. Putting a Pi between the ESP32 and the rest of the world lets us host our own private WiFi network just for the roaster, eliminating that variable entirely. No firmware or web-app code changes required.
 
-### Firmware changes (~50-80 LOC)
+### Recommended architecture: Pi as WiFi AP + kiosk
 
-- Add `ARDUINO_USB_CDC_ON_BOOT=1` to the main `esp32-s3` env in `platformio.ini` (the s3-mini env already has it).
-- In `CommandLoop.cpp` status loop, mirror outbound JSON to `Serial.println(output)`.
-- In `main.cpp` loop(), read `Serial.available()` line-by-line, JSON-parse, dispatch to the same command handler as `WSRequestHandler::onWsEvent`.
-- Decide where logs go: either prefix log lines (`LOG: ...`) so the client filters them out, or route logging to UART0 on different pins.
+- Pi 4 + 7" official touchscreen (~$120 hardware total). Mounted on/near the roaster.
+- Pi runs `hostapd` + `dnsmasq`, broadcasting something like "Yaeger-Net". ESP32 joins this SSID (configure once via the existing setup flow). DHCP reservation in dnsmasq pins the ESP32 to a known IP.
+- Pi can simultaneously be on Ethernet for actual internet — OTA, NTP, anything cloud-side still works. The internet just isn't in the dashboard-to-ESP32 hot path.
+- Dashboard hosting: two options.
+  - **Easy**: Pi browser points at `http://<esp32-ip>/`, ESP32 serves the dashboard from LittleFS as today. The Pi's AP makes the link rock-solid; nothing else changes.
+  - **Slightly nicer**: build the dashboard once (`npm run build`), copy `data/` to `/var/www/yaeger/` on the Pi, serve via nginx. ESP32 only handles WebSocket + API. Faster page load, update UI without reflashing firmware. Trade-off: dashboard and firmware versions can drift.
+- Kiosk: a systemd unit launches `chromium-browser --kiosk --noerrdialogs http://yaeger.local/` (or the Pi-local URL) on boot. ~10 lines of unit file. Pi powers up → dashboard on screen.
 
-### Web changes (~120-150 LOC)
+### Alternative: ESP32 hosts its own AP
 
-- New `serial.ts` mirroring `websocket.ts`'s shape: exports `connectionStatus`, `lastMessage`, `lastUpdate`, a `send()` function. Opens port via `navigator.serial.requestPort()`, reads bytes through a newline splitter, JSON-parses each line, writes JSON-stringified commands with `\n` framing.
-- Transport abstraction: `roast.ts` shouldn't care which transport is active. Pick at startup, default to WebSocket with a "Connect USB" fallback button.
-- Auto-reconnect via `navigator.serial.getPorts()` after the first user grant.
+Firmware already supports this — `setupAP()` in `src/wifi_setup.cpp:45-49` broadcasts "Yaeger" when no WiFi credentials are stored. Wipe credentials → ESP32 becomes its own network → Pi (or anything) connects directly. Zero additional code.
 
-### Offline page-loading gotcha
+Trade-off: ESP32's softAP has limited range and client capacity, and the ESP32 loses internet access while in AP mode (no OTA, no NTP). Fine as a fallback or for portable use, not ideal for a permanent install.
 
-If WiFi is dead, you also can't load the dashboard from the ESP32. Two paths:
+### Effort
 
-- Dev/laptop setup: `npm run dev` on your machine, open `localhost:3000`, click "Connect USB". Page is local, USB carries the data.
-- Production: enable the PWA service worker (currently `injectRegister: null` in `vite.config.ts:86`). Install the PWA once while online → loads from cache offline thereafter.
+- Half a day if comfortable with Pi setup.
+- One day if learning hostapd from scratch.
+- Zero firmware or web code changes for the basic version.
 
-Web Serial requires a secure context, so neither `file://` nor an http page from a non-localhost origin works. Localhost or installed PWA only.
+### What this replaces
 
-### Effort: ~1 day total
+- **USB serial fallback / Web Serial API** — irrelevant. The Pi-ESP32 link doesn't go through home WiFi or the internet, so flaky external networking can't break it. Web Serial was solving a problem that doesn't exist in this topology.
+- **PWA offline activation** — also unnecessary. The Pi's local network is stable by design. You can still enable the PWA for cosmetic benefit (faster page load from cache), but it's not load-bearing.
+- **Web Bluetooth** — same.
 
-Firmware: one afternoon. Web: one afternoon. PWA offline activation: ~5 LOC.
+### When the USB approach would still be worth it
 
-### Caveats
+One case: you want to control the roaster from a laptop somewhere else, no Pi present. Pi kiosk covers "I'm standing at the roaster" (90% of operations) better; USB would cover "I'm on the couch" (10%). Probably not worth building both — pick the use case that matters more.
 
-- Chromium-only browser support (~75% of desktops).
-- USB cable must carry data, not just power.
-- Browser shows a port-picker prompt on first connect each session — subsequent connects can auto-resume the saved port.
-- Concurrent WiFi + USB technically works (both transports receive status, both can send commands) — UI should pick one at a time to keep the model simple.
-- The logging-vs-protocol routing decision on the same Serial pipe is the only real architectural question.
+### Setup steps if pursued
 
-### Alternative: Web Bluetooth (BLE)
-
-Same browser support story (Chromium-only), same architecture. Wire-free but more complex (GATT services, MTU sizing). For a countertop roaster on USB power, plain USB serial is simpler. Worth knowing it exists.
-
-### Suggested order if pursued
-
-1. Add `Serial.println(output)` in firmware status loop. Verify with Arduino IDE serial monitor that JSON is coming out cleanly.
-2. Add the inbound serial command parser in firmware. Verify by sending commands manually from the monitor.
-3. Write `serial.ts` on the web side.
-4. Add transport selector UI.
-5. Enable PWA service worker if true offline use is wanted.
+1. Provision Pi OS Lite (or full with desktop, depending on kiosk preference).
+2. Install hostapd + dnsmasq, configure AP on `wlan0` with a fixed SSID/passphrase and DHCP range.
+3. Boot the ESP32, enter setup mode, point it at the Pi's SSID.
+4. Reserve a static IP for the ESP32 in dnsmasq using its MAC.
+5. Install chromium-browser. Create a systemd user unit that launches it in kiosk mode at boot.
+6. (Optional) Set up nginx serving the prebuilt dashboard from `/var/www/yaeger/` for the "nicer" hosting variant.
+7. (Optional) Wire up Ethernet for internet on the Pi without compromising the AP.
