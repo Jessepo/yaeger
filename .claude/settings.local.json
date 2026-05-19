@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(Select-Object -First 80)"
+      "Bash(Select-Object -First 80)",
+      "Bash(where.exe pio *)",
+      "Bash(where.exe platformio *)",
+      "Bash(npm.cmd run *)"
     ]
   }
 }

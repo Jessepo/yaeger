@@ -8,3 +8,4 @@ node_modules
 local.config.ts
 data/
 Credentials.h
+.claude/settings.local.json
