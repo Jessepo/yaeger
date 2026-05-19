@@ -268,23 +268,33 @@ input[type="range"]:disabled {
 }
 
 .btn-end {
-  background: var(--danger);
-  color: var(--bg-0);
-  border-color: var(--danger);
+  background: #6e4a2e;
+  color: var(--text-0);
+  border-color: #8b6240;
 }
 .btn-end:hover:not(:disabled) {
-  background: #e54a3d;
-  border-color: #e54a3d;
+  background: #8b6240;
+  border-color: #a47854;
 }
 
 .btn-cool {
-  background: var(--info);
+  background: #5b8caf;
   color: var(--text-0);
-  border-color: var(--info);
+  border-color: #6a9bbe;
 }
 .btn-cool:hover:not(:disabled) {
-  background: #7d3f44;
-  border-color: #7d3f44;
+  background: #6a9bbe;
+  border-color: #82adcb;
+}
+
+.btn-alloff {
+  background: #5d2521;
+  color: var(--text-0);
+  border-color: #7a3530;
+}
+.btn-alloff:hover:not(:disabled) {
+  background: #8b3a32;
+  border-color: #a04136;
 }
 
 .btn-mode.active {

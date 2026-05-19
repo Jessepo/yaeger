@@ -190,13 +190,11 @@ const SavedProfilesList = () => {
                     onclick: () => loadProfileFromDevice(sp.name),
                     style: "flex: 1; padding: 0.25rem 0.5rem; font-size: 0.75rem; text-align: left;",
                   },
-                  sp.name.replace(/^.*\//, "").replace(/\.json$/, ""),
+                  sp.name,
                 ),
                 button(
                   {
-                    onclick: () => deleteProfileFromDevice(
-                      sp.name.replace(/^.*\//, "").replace(/\.json$/, ""),
-                    ),
+                    onclick: () => deleteProfileFromDevice(sp.name),
                     style:
                       "padding: 0.25rem 0.5rem; background: var(--danger); color: var(--bg-0); border-color: var(--danger); font-size: 0.75rem;",
                   },
@@ -259,22 +257,6 @@ export const ProfileControl = () =>
         "Device Storage",
       ),
       SavedProfilesList,
-    ),
-    div(
-      { style: "margin-top: 10px;" },
-      label(
-        {
-          style:
-            "display: flex; align-items: center; gap: 6px; font-size: 0.75rem;",
-        },
-        input({
-          type: "checkbox",
-          checked: followProfileEnabled,
-          oninput: (e: Event) =>
-            (followProfileEnabled.val = (e.target as HTMLInputElement).checked),
-        }),
-        "Follow Profile",
-      ),
     ),
   );
 

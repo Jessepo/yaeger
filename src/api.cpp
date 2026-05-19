@@ -16,6 +16,16 @@ static String sanitizeName(String n) {
   return n;
 }
 
+// Strip directory prefix and ".json" suffix so the client sees user-facing
+// names (e.g. "second profile") rather than the on-disk path
+// ("/profiles/second profile.json").
+static String basenameNoExt(const String &p) {
+  int slash = p.lastIndexOf('/');
+  String n = slash >= 0 ? p.substring(slash + 1) : p;
+  if (n.endsWith(".json")) n = n.substring(0, n.length() - 5);
+  return n;
+}
+
 #include "preferenceKeys.h"
 
 void setupApi(AsyncWebServer *server, Preferences *preferences) {
@@ -107,7 +117,7 @@ void setupApi(AsyncWebServer *server, Preferences *preferences) {
     while (file) {
       if (!file.isDirectory() && String(file.name()).endsWith(".json")) {
         JsonObject roast = roasts.add<JsonObject>();
-        roast["name"] = file.name();
+        roast["name"] = basenameNoExt(file.name());
         roast["size"] = file.size();
       }
       file = dir.openNextFile();
@@ -230,7 +240,7 @@ void setupApi(AsyncWebServer *server, Preferences *preferences) {
     while (file) {
       if (!file.isDirectory() && String(file.name()).endsWith(".json")) {
         JsonObject p = profiles.add<JsonObject>();
-        p["name"] = file.name();
+        p["name"] = basenameNoExt(file.name());
         p["size"] = file.size();
       }
       file = dir.openNextFile();

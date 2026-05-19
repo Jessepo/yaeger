@@ -112,13 +112,17 @@ function computeSGKernel(windowSize: number, polyorder: number): number[] {
   return kernel;
 }
 
-const SG_KERNEL = computeSGKernel(SG_WINDOW, SG_POLYORDER);
+const SG_KERNEL_BT = computeSGKernel(SG_WINDOW, SG_POLYORDER);
+// Wider kernel for ROR: BT noise gets amplified by differentiation, so a
+// second SG pass on the derived ROR keeps the line readable at the cost of
+// a few seconds of lag at the leading edge.
+const SG_KERNEL_ROR = computeSGKernel(41, SG_POLYORDER);
 
 // Apply SG by convolution. Near the edges (window extends past data), we
 // re-normalize by the partial-sum of weights so the output stays in the
 // right range rather than blending toward zero.
-function sgSmooth(data: number[]): number[] {
-  const m = (SG_KERNEL.length - 1) / 2;
+function sgSmooth(data: number[], kernel: number[] = SG_KERNEL_BT): number[] {
+  const m = (kernel.length - 1) / 2;
   const out = new Array(data.length);
   for (let i = 0; i < data.length; i++) {
     let sum = 0;
@@ -126,8 +130,8 @@ function sgSmooth(data: number[]): number[] {
     for (let k = -m; k <= m; k++) {
       const idx = i + k;
       if (idx >= 0 && idx < data.length) {
-        sum += SG_KERNEL[k + m] * data[idx];
-        w += SG_KERNEL[k + m];
+        sum += kernel[k + m] * data[idx];
+        w += kernel[k + m];
       }
     }
     out[i] = w === 0 ? data[i] : sum / w;
@@ -367,9 +371,16 @@ export function updateChart(chart: ChartInstance, roast: RoastState) {
   const burner = measurements.map((m) => m.message.BurnerVal);
 
   // Smooth BT/ET first, then differentiate for ROR (matches fig-gen.py).
+  // Second SG pass over the ROR series itself to suppress the residual
+  // jitter that differentiation amplifies.
   const btSmoothed = sgSmooth(bt);
   const etSmoothed = sgSmooth(et);
-  const btRor = smoothedRor(btSmoothed, times);
+  const btRorRaw = smoothedRor(btSmoothed, times);
+  const btRorFilled: number[] = btRorRaw.map((v) => v ?? 0);
+  const btRorFiltered = sgSmooth(btRorFilled, SG_KERNEL_ROR);
+  const btRor: (number | null)[] = btRorRaw.map((v, i) =>
+    v == null ? null : btRorFiltered[i],
+  );
 
   const btData = times.map((t, i) => [t, btSmoothed[i]]);
   const etData = times.map((t, i) => [t, etSmoothed[i]]);

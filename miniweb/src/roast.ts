@@ -608,7 +608,16 @@ async function updateWifi() {
 
 function setMode(m: "Manual" | "PID") {
   currentMode.val = m;
+  followProfileEnabled.val = m === "PID";
   sendCommand({ id: 1, Mode: m });
+}
+
+function allOff() {
+  setMode("Manual");
+  updateFanPower(0);
+  updateHeaterPower(0);
+  slider1Value.val = 0;
+  slider2Value.val = 0;
 }
 
 function setTarget(t: "BT" | "ET") {
@@ -735,13 +744,17 @@ const createApp = () => div(
         "Cool Down",
       ),
       button(
+        { class: "btn-action btn-alloff", onclick: allOff },
+        "All Off",
+      ),
+      button(
         {
           class: () =>
             `btn-action btn-mode ${currentMode.val === "PID" ? "active" : ""}`,
           onclick: () =>
-            setMode(currentMode.val === "Manual" ? "PID" : "Manual"),
+            setMode(currentMode.val === "PID" ? "Manual" : "PID"),
         },
-        () => (currentMode.val === "PID" ? "Auto" : "Manual"),
+        () => (currentMode.val === "PID" ? "PID On" : "PID Off"),
       ),
     ),
   ),
