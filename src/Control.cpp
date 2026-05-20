@@ -16,22 +16,33 @@ const char *modeToChar(OperationalMode mode) {
 }
 
 
-Control::Control(float kp, float ki, float kd, TemperatureTarget target)
+Control::Control(float kp, float ki, float kd, TemperatureTarget target, bool fanSsrMode)
   : _autotune(0, MAX_HEATER_POWER, TuningMethod::ZieglerNichols),
     _temperatureTarget(target),
-    lastUpdate(0),
-    tuningEnabled(false),
-    hasResults(false),
-    _fan(FAN_PIN, FAN_FREQUENCY, 10, 0),
+    _pwmFan(fanSsrMode ? nullptr : new PwmOutput(FAN_PIN, FAN_FREQUENCY, 10, 0)),
+    _fanPin(FAN_PIN),
+    _fanSsrMode(fanSsrMode),
+    _ssrFanOn(false),
     _heater(HEATER_PIN, HEATER_FREQUENCY, 10, 1),
     _etSensor(MAX1CLK, MAX1CS, MAX1DO, "Exhaust"),
-    _btSensor(MAX2CLK, MAX2CS, MAX2DO, "Bean") {
+    _btSensor(MAX2CLK, MAX2CS, MAX2DO, "Bean"),
+    lastUpdate(0),
+    tuningEnabled(false),
+    hasResults(false) {
+  if (_fanSsrMode) {
+    pinMode(_fanPin, OUTPUT);
+    digitalWrite(_fanPin, LOW);
+  }
   _autotune.setManualGains(kp, ki, kd);
   _autotune.enableAntiWindup(true, 0.8);
   _autotune.setOscillationMode(OscillationMode::Normal);
   _autotune.setSetpoint(0.);
   _autotune.setOperationalMode(OperationalMode::Manual);
   _autotune.setManualOutput(0.);
+}
+
+Control::~Control() {
+  delete _pwmFan;
 }
 
 
@@ -76,11 +87,17 @@ float Control::getKd() const {
 }
 
 void Control::setFan(float value) {
-  _fan.setValue(value);
+  if (_fanSsrMode) {
+    _ssrFanOn = value > 0.f;
+    digitalWrite(_fanPin, _ssrFanOn ? HIGH : LOW);
+  } else if (_pwmFan) {
+    _pwmFan->setValue(value);
+  }
 }
 
 float Control::getFan() const {
-  return _fan.getValue();
+  if (_fanSsrMode) return _ssrFanOn ? 100.f : 0.f;
+  return _pwmFan ? _pwmFan->getValue() : 0.f;
 }
 
 void Control::setTemperatureTarget(TemperatureTarget target) {

@@ -34,7 +34,10 @@ class Control {
 private:
   AutoTunePID _autotune;
   TemperatureTarget _temperatureTarget;
-  PwmOutput _fan;
+  PwmOutput *_pwmFan;   // owned; null when in SSR fan mode
+  int _fanPin;
+  bool _fanSsrMode;
+  bool _ssrFanOn;
   PwmOutput _heater;
   Sensor _etSensor;
   Sensor _btSensor;
@@ -47,8 +50,8 @@ private:
   float getTemperature() const;
 
 public:
-  Control(float kp, float ki, float kd, TemperatureTarget target);
-  ~Control() = default;
+  Control(float kp, float ki, float kd, TemperatureTarget target, bool fanSsrMode);
+  ~Control();
 
   // PID gain configuration
   void setPidValues(float kp, float ki, float kd);

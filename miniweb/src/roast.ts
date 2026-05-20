@@ -41,6 +41,8 @@ const currentMode = van.state<"Manual" | "PID">("Manual");
 const currentTarget = van.state<"BT" | "ET">("BT");
 const fanOffset = van.state(0);
 const cooldownFanSpeed = van.state(50);
+const fanMode = van.state<"pwm" | "ssr">("pwm");
+const fanModeChanged = van.state(false);  // shows reboot-needed notice when toggled
 const wifiSSID = van.state("");
 const wifiPass = van.state("");
 const wifiMessage = van.state("");
@@ -87,6 +89,11 @@ van.derive(() => {
       if (typeof message.cooldownFanSpeed === "number") {
         cooldownFanSpeed.val = message.cooldownFanSpeed;
         tempCooldownFan = message.cooldownFanSpeed;
+      }
+      if (message.fanMode === "pwm" || message.fanMode === "ssr") {
+        fanMode.val = message.fanMode;
+        // Server is source of truth on boot; clear the "reboot needed" flag.
+        fanModeChanged.val = false;
       }
       return;
     }
@@ -535,10 +542,32 @@ const SavedRoastsList = () => {
 
 const PIDConfig = () =>
   div(
-    { class: "pid-form" },
     div(
-      { class: "pid-field" },
-      label({ class: "pid-label" }, "Kp"),
+      {
+        class: "fan-mode-row",
+      },
+      span({ class: "toggle-row-label" }, "Fan Control"),
+      button({
+        class: () => `toggle ${fanMode.val === "ssr" ? "active" : ""}`,
+        onclick: () => {
+          fanMode.val = fanMode.val === "ssr" ? "pwm" : "ssr";
+          fanModeChanged.val = true;
+        },
+      }),
+      span(
+        { class: "toggle-state-label" },
+        () => (fanMode.val === "ssr" ? "SSR" : "PWM"),
+      ),
+      () =>
+        fanModeChanged.val
+          ? span({ class: "reboot-notice" }, "reboot to apply")
+          : null,
+    ),
+    div(
+      { class: "pid-form" },
+      div(
+        { class: "pid-field" },
+        label({ class: "pid-label" }, "Kp"),
       input({
         type: "number",
         class: "pid-input",
@@ -584,6 +613,7 @@ const PIDConfig = () =>
         step: "5",
         min: "0",
         max: "100",
+        disabled: () => fanMode.val === "ssr",
         value: () => cooldownFanSpeed.val,
         oninput: (e: Event) => {
           tempCooldownFan =
@@ -606,10 +636,12 @@ const PIDConfig = () =>
             pidKi: tempI,
             pidKd: tempD,
             cooldownFanSpeed: tempCooldownFan,
+            fanMode: fanMode.val,
           });
         },
       },
       "Apply",
+    ),
     ),
   );
 
@@ -780,14 +812,14 @@ const createApp = () => div(
         { class: "btn-action btn-alloff", onclick: allOff },
         "All Off",
       ),
-      button(
-        {
-          class: () =>
-            `btn-action btn-mode ${currentMode.val === "PID" ? "active" : ""}`,
+      div(
+        { class: "toggle-row" },
+        span({ class: "toggle-row-label" }, "PID"),
+        button({
+          class: () => `toggle ${currentMode.val === "PID" ? "active" : ""}`,
           onclick: () =>
             setMode(currentMode.val === "PID" ? "Manual" : "PID"),
-        },
-        () => (currentMode.val === "PID" ? "PID On" : "PID Off"),
+        }),
       ),
     ),
   ),
@@ -816,7 +848,44 @@ const createApp = () => div(
       div(
         { class: "panel-section" },
         div({ class: "panel-title" }, "Controls"),
+        Slider({
+          label: "Heater Power",
+          unit: "%",
+          state: slider2Value,
+          min: 0,
+          max: 100,
+          step: 5,
+          disabled: () => currentMode.val === "PID",
+          onChange: (v) => {
+            slider2Value.val = v;
+            updateHeaterPower(v);
+          },
+        }),
         () => {
+          // SSR fan: simple on/off toggle, no offset
+          if (fanMode.val === "ssr") {
+            return div(
+              { class: "control" },
+              div(
+                { class: "control-header" },
+                span({ class: "control-label" }, "Fan"),
+                span(
+                  { class: "control-value" },
+                  () => (slider1Value.val > 0 ? "ON" : "OFF"),
+                ),
+              ),
+              button({
+                class: () =>
+                  `toggle ${slider1Value.val > 0 ? "active" : ""}`,
+                onclick: () => {
+                  const next = slider1Value.val > 0 ? 0 : 100;
+                  slider1Value.val = next;
+                  updateFanPower(next);
+                },
+              }),
+            );
+          }
+          // PWM fan: existing behaviour
           const followingFan =
             followProfileEnabled.val &&
             profile.val != null &&
@@ -846,19 +915,6 @@ const createApp = () => div(
                 },
               });
         },
-        Slider({
-          label: "Heater Power",
-          unit: "%",
-          state: slider2Value,
-          min: 0,
-          max: 100,
-          step: 5,
-          disabled: () => currentMode.val === "PID",
-          onChange: (v) => {
-            slider2Value.val = v;
-            updateHeaterPower(v);
-          },
-        }),
         Slider({
           label: "Setpoint",
           unit: "°C",

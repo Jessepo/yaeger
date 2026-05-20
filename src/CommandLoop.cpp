@@ -131,6 +131,15 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
           preferences->putLong(coolingFanKey, cooldownFanSpeed);
         }
 
+        if (!doc["fanMode"].isNull()) {
+          // "pwm" or "ssr" — applied at next boot.
+          String fanMode = doc["fanMode"].as<const char *>();
+          if (fanMode == "pwm" || fanMode == "ssr") {
+            preferences->putString(fanModeKey, fanMode);
+            if (DEBUG) logf("fanMode: %s (reboot to apply)", fanMode.c_str());
+          }
+        }
+
 
         if (!doc["wifiSsid"].isNull() && !doc["wifiPass"].isNull()) {
           if (DEBUG) log("Wifi Credentials found, saving...");
@@ -155,6 +164,7 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         resultData["pidKi"] = preferences->getFloat(pidIKey, 0.1);
         resultData["pidKd"] = preferences->getFloat(pidDKey, 0.01);
         resultData["cooldownFanSpeed"] = preferences->getLong(coolingFanKey, 50);
+        resultData["fanMode"] = preferences->getString(fanModeKey, "pwm");
 
         char buffer[200]; // create temp buffer
         serializeJson(doc, buffer); // serialize to buffer

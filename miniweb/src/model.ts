@@ -16,6 +16,7 @@ export type YaegerMessage = {
   wifiStrength?: number;
   type?: string;
   cooldownFanSpeed?: number;
+  fanMode?: string;
 }
 
 export class YaegerState  {

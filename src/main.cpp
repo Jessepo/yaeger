@@ -100,7 +100,8 @@ void setup() {
     preferences.getFloat(pidPKey,1),
     preferences.getFloat(pidIKey,0.1),
     preferences.getFloat(pidDKey,0.01),
-    StringToTarget(preferences.getString(temperatureTargetKey,"ET"))
+    StringToTarget(preferences.getString(temperatureTargetKey,"ET")),
+    preferences.getString(fanModeKey, "pwm") == "ssr"
   );
 
   // WebSocket handler

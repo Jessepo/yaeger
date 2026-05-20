@@ -11,5 +11,6 @@ inline const char *pidDKey = "pidD";
 
 inline const char *temperatureTargetKey = "tempTarget";
 inline const char *coolingFanKey = "coolingFan";
+inline const char *fanModeKey = "fanMode"; // "pwm" or "ssr"
 
 #endif
