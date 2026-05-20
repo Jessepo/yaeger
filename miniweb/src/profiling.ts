@@ -1,7 +1,7 @@
 import van from "vanjs-core";
-const { label, button, div, input, select, option, canvas, p, span } = van.tags;
+const { label, button, div, input, select, option, canvas, p, span, table, thead, tbody, tr, th, td } = van.tags;
 
-import { Profile, RoastState } from "./model";
+import { Profile, ProfileStep, RoastState } from "./model";
 
 export const profile = van.state<Profile | undefined>();
 export const followProfileEnabled = van.state(true);
@@ -205,6 +205,289 @@ const SavedProfilesList = () => {
           ),
   );
 };
+
+// ============================================================================
+// Profile point editor
+// Editing the duration-based Profile.steps schema in place is awkward (moving
+// a point in time requires recomputing two neighbouring durations), so we
+// convert to an absolute-time "ProfilePoint" representation for the editor,
+// then derive Profile.steps back out when committing changes.
+// ============================================================================
+
+export type ProfilePoint = {
+  time: number; // seconds from roast start
+  setpoint: number;
+  fan?: number;
+};
+
+export function pointsFromProfile(p: Profile): ProfilePoint[] {
+  if (p.steps.length === 0) return [];
+  const out: ProfilePoint[] = [];
+  // First step is the anchor: an instant value at t=0.
+  out.push({ time: 0, setpoint: p.steps[0].setpoint, fan: p.steps[0].fanValue });
+  let t = p.steps[0].duration; // typically 0.01 from the phased converter
+  for (let i = 1; i < p.steps.length; i++) {
+    t += p.steps[i].duration;
+    out.push({ time: t, setpoint: p.steps[i].setpoint, fan: p.steps[i].fanValue });
+  }
+  return out;
+}
+
+export function profileFromPoints(points: ProfilePoint[]): Profile {
+  if (points.length === 0) return { steps: [] };
+  const sorted = [...points].sort((a, b) => a.time - b.time);
+  const steps: ProfileStep[] = [
+    {
+      interpolation: "linear",
+      setpoint: sorted[0].setpoint,
+      duration: 0.01,
+      fanValue: sorted[0].fan,
+    },
+  ];
+  for (let i = 1; i < sorted.length; i++) {
+    const duration = sorted[i].time - sorted[i - 1].time;
+    if (duration <= 0) continue; // skip duplicate / out-of-order timestamps
+    steps.push({
+      interpolation: "linear",
+      setpoint: sorted[i].setpoint,
+      duration,
+      fanValue: sorted[i].fan,
+    });
+  }
+  return { steps };
+}
+
+function fmtTime(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = Math.round(secs - m * 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function parseTime(s: string): number | null {
+  s = s.trim();
+  if (s === "") return null;
+  if (s.includes(":")) {
+    const parts = s.split(":");
+    const m = parseInt(parts[0], 10);
+    const sec = parseInt(parts[1], 10);
+    if (isNaN(m) || isNaN(sec)) return null;
+    return Math.max(0, m * 60 + sec);
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : Math.max(0, n);
+}
+
+// Working copy that drives the editor table. Externally-loaded profiles
+// (file upload, device load, Clear) seed it via the van.derive below.
+// Edits do NOT trigger a reset because we update lastSyncedProfile to match
+// the new value before propagating to profile.val.
+const editPoints = van.state<ProfilePoint[]>([]);
+export const selectedPointIdx = van.state(-1);
+export const selectedPointTime = van.derive<number | null>(() => {
+  const idx = selectedPointIdx.val;
+  const pts = editPoints.val;
+  if (idx < 0 || idx >= pts.length) return null;
+  return pts[idx].time;
+});
+let lastSyncedProfile: Profile | undefined = undefined;
+
+van.derive(() => {
+  const p = profile.val;
+  if (p !== lastSyncedProfile) {
+    lastSyncedProfile = p;
+    const newPts = p ? pointsFromProfile(p) : [];
+    editPoints.val = newPts;
+    selectedPointIdx.val = newPts.length > 0 ? 0 : -1;
+  }
+});
+
+function commitEdits(next: ProfilePoint[]) {
+  editPoints.val = next;
+  const newProfile = profileFromPoints(next);
+  lastSyncedProfile = newProfile;
+  profile.val = newProfile;
+}
+
+// Time bounds for the currently-selected point. Enforces chronological order
+// of the points array so selection indices stay stable across adjustments.
+function timeBoundsAt(pts: ProfilePoint[], idx: number): [number, number] {
+  const minT = idx === 0 ? 0 : pts[idx - 1].time + 0.1;
+  const maxT = idx === pts.length - 1 ? Number.POSITIVE_INFINITY : pts[idx + 1].time - 0.1;
+  return [minT, maxT];
+}
+
+function adjustSelected(dim: "time" | "temp" | "fan", delta: number) {
+  const idx = selectedPointIdx.val;
+  const pts = editPoints.val;
+  if (idx < 0 || idx >= pts.length) return;
+  const pt = pts[idx];
+  const next: ProfilePoint = { ...pt };
+  if (dim === "time") {
+    const [minT, maxT] = timeBoundsAt(pts, idx);
+    next.time = Math.max(minT, Math.min(maxT, pt.time + delta));
+  } else if (dim === "temp") {
+    next.setpoint = Math.max(0, Math.min(300, pt.setpoint + delta));
+  } else if (dim === "fan") {
+    const current = pt.fan ?? 0;
+    next.fan = Math.max(0, Math.min(100, current + delta));
+  }
+  const arr = [...pts];
+  arr[idx] = next;
+  commitEdits(arr);
+}
+
+function addPointAfterSelected() {
+  const pts = editPoints.val;
+  const sel = selectedPointIdx.val;
+  let newPt: ProfilePoint;
+  let insertIdx: number;
+  if (pts.length === 0) {
+    newPt = { time: 0, setpoint: 50, fan: 50 };
+    insertIdx = 0;
+  } else if (sel < 0 || sel >= pts.length - 1) {
+    // Selection is the last point (or invalid) — append 60s past it.
+    const last = pts[pts.length - 1];
+    newPt = { time: last.time + 60, setpoint: last.setpoint, fan: last.fan };
+    insertIdx = pts.length;
+  } else {
+    // Insert halfway between selected and next, averaging values.
+    const a = pts[sel];
+    const b = pts[sel + 1];
+    newPt = {
+      time: (a.time + b.time) / 2,
+      setpoint: Math.round((a.setpoint + b.setpoint) / 2),
+      fan: a.fan != null && b.fan != null ? Math.round((a.fan + b.fan) / 2) : a.fan ?? b.fan,
+    };
+    insertIdx = sel + 1;
+  }
+  const arr = [...pts.slice(0, insertIdx), newPt, ...pts.slice(insertIdx)];
+  commitEdits(arr);
+  selectedPointIdx.val = insertIdx;
+}
+
+function deleteSelected() {
+  const idx = selectedPointIdx.val;
+  const pts = editPoints.val;
+  if (idx < 0 || idx >= pts.length) return;
+  const arr = pts.filter((_, i) => i !== idx);
+  commitEdits(arr);
+  selectedPointIdx.val = arr.length === 0 ? -1 : Math.min(idx, arr.length - 1);
+}
+
+export const ProfileEditor = () =>
+  div(
+    { class: "profile-editor" },
+    () => {
+      const pts = editPoints.val;
+      const sel = selectedPointIdx.val;
+      if (pts.length === 0) {
+        return div(
+          { class: "profile-editor-empty" },
+          "Load a profile to edit its points.",
+          button(
+            {
+              class: "profile-editor-empty-add",
+              onclick: addPointAfterSelected,
+            },
+            "+ Add first point",
+          ),
+        );
+      }
+      return div(
+        { class: "profile-editor-row" },
+        // Horizontal strip of point columns (time / temp / fan stacked).
+        div(
+          { class: "profile-cols-wrap" },
+          div(
+            { class: "profile-row-labels" },
+            div({ class: "prow-label" }, "TIME"),
+            div({ class: "prow-label" }, "°C"),
+            div({ class: "prow-label" }, "FAN"),
+          ),
+          div(
+            { class: "profile-cols" },
+            ...pts.map((pt, idx) =>
+              div(
+                {
+                  class: () =>
+                    "profile-col" +
+                    (selectedPointIdx.val === idx ? " selected" : ""),
+                  onclick: () => {
+                    selectedPointIdx.val = idx;
+                  },
+                },
+                div({ class: "pcol-cell pcol-time" }, fmtTime(pt.time)),
+                div({ class: "pcol-cell pcol-temp" }, String(Math.round(pt.setpoint))),
+                div(
+                  { class: "pcol-cell pcol-fan" },
+                  pt.fan == null ? "—" : String(Math.round(pt.fan)),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Adjustment + add/delete panel — 3 rows total.
+        div(
+          { class: "profile-adjust" },
+          // Left grid: 3 rows of (label, -, +)
+          div(
+            { class: "padj-grid" },
+            span({ class: "padj-label" }, "Time"),
+            button(
+              { class: "padj-btn", onclick: () => adjustSelected("time", -30) },
+              "−30s",
+            ),
+            button(
+              { class: "padj-btn", onclick: () => adjustSelected("time", +30) },
+              "+30s",
+            ),
+            span({ class: "padj-label" }, "Temp"),
+            button(
+              { class: "padj-btn", onclick: () => adjustSelected("temp", -1) },
+              "−1°",
+            ),
+            button(
+              { class: "padj-btn", onclick: () => adjustSelected("temp", +1) },
+              "+1°",
+            ),
+            span({ class: "padj-label" }, "Fan"),
+            button(
+              { class: "padj-btn", onclick: () => adjustSelected("fan", -5) },
+              "−5%",
+            ),
+            button(
+              { class: "padj-btn", onclick: () => adjustSelected("fan", +5) },
+              "+5%",
+            ),
+          ),
+          // Right side: 3 stacked widgets aligned with the rows above
+          div(
+            { class: "padj-side" },
+            div(
+              { class: "padj-meta" },
+              "Point ",
+              span(
+                { class: "padj-idx" },
+                sel >= 0 ? `${sel + 1} / ${pts.length}` : "—",
+              ),
+            ),
+            button(
+              { class: "padj-add", onclick: addPointAfterSelected },
+              "+ Add",
+            ),
+            button(
+              {
+                class: "padj-delete",
+                onclick: deleteSelected,
+                disabled: sel < 0,
+              },
+              "Delete",
+            ),
+          ),
+        ),
+      );
+    },
+  );
 
 export const ProfileControl = () =>
   div(

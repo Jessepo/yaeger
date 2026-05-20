@@ -1,6 +1,6 @@
 import "./style.css";
 import van from "vanjs-core";
-import { initializeChart, updateChart, updateProfileLines } from "./chart";
+import { initializeChart, updateChart, updateProfileLines, highlightTime } from "./chart";
 import {
   YaegerState,
   Measurement,
@@ -13,6 +13,8 @@ import {
   followProfileEnabled,
   profile,
   ProfileControl,
+  ProfileEditor,
+  selectedPointTime,
 } from "./profiling.ts";
 import { socket, lastMessage, lastUpdate, connectionStatus } from "./websocket";
 
@@ -54,6 +56,11 @@ const chart = initializeChart(chartElement);
 // Redraw planned-profile lines whenever a profile is loaded/cleared
 van.derive(() => {
   updateProfileLines(chart, profile.val);
+});
+
+// Move the chart's crosshair + tooltip to the selected profile point.
+van.derive(() => {
+  highlightTime(chart, selectedPointTime.val);
 });
 
 // Add a derived state for current message
@@ -973,6 +980,9 @@ const createApp = () => div(
       ),
     ),
   ),
+
+  // --- Profile point editor (full-width row under the chart) ------------
+  div({ class: "profile-strip" }, ProfileEditor),
 
   // --- Collapsible settings ---------------------------------------------
   div(

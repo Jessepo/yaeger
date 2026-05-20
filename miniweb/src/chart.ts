@@ -420,6 +420,49 @@ export function updateChart(chart: ChartInstance, roast: RoastState) {
   });
 }
 
+// Programmatically show the chart's hover crosshair + tooltip at a given
+// time. Used by the profile point editor to "preview" what's at the
+// selected point's time. Anchors the tooltip to the BT series when BT has
+// data at or past the selected time; otherwise just moves the crosshair.
+export function highlightTime(chart: ChartInstance, t: number | null) {
+  if (t == null) {
+    chart.dispatchAction({ type: "hideTip" });
+    chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "leave" });
+    return;
+  }
+  const option = chart.getOption() as { series?: Array<{ name?: string; data?: [number, number][] }> };
+  const btIdx = option.series?.findIndex((s) => s.name === "BT") ?? -1;
+  const data = btIdx >= 0 ? option.series?.[btIdx].data : undefined;
+  if (data && data.length > 0 && data[data.length - 1][0] >= t) {
+    // Binary search the closest BT index
+    let lo = 0;
+    let hi = data.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (data[mid][0] < t) lo = mid + 1;
+      else hi = mid;
+    }
+    if (
+      lo > 0 &&
+      Math.abs(data[lo - 1][0] - t) < Math.abs(data[lo][0] - t)
+    ) {
+      lo--;
+    }
+    chart.dispatchAction({
+      type: "showTip",
+      seriesIndex: btIdx,
+      dataIndex: lo,
+    });
+  } else {
+    // No BT data at this time yet — just move the crosshair.
+    chart.dispatchAction({
+      type: "updateAxisPointer",
+      currTrigger: "mousemove",
+      axesInfo: [{ axisDim: "x", axisIndex: 0, value: t }],
+    });
+  }
+}
+
 export function updateProfileLines(
   chart: ChartInstance,
   profile: Profile | undefined,
