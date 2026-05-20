@@ -4,7 +4,8 @@
       "Bash(Select-Object -First 80)",
       "Bash(where.exe pio *)",
       "Bash(where.exe platformio *)",
-      "Bash(npm.cmd run *)"
+      "Bash(npm.cmd run *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
