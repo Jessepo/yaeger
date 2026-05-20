@@ -2,6 +2,10 @@
 2. Add an "all off" button on top. Disable PID, turn off heater, turn off fan
 3. When clicking on a saved profile, a "filed to load prifile" popup appears
 4. The BT rate of rise is way too erratic. At least double the filtering for this one, at the expense of adding a delay to the plot.
+All above here done
+5. The heater works, but the PID isn't controlling the heater. The slider isn't even moving on the app. The fan is running to the given profile just fine though (I'm in PWM mode)
+6. The BT rate of rise is still too eratic. Is it based on the smoothed BT or the real BT?
+7. Saved roasts does nothing
 
 ---
 
