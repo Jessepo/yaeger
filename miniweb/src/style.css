@@ -387,7 +387,6 @@ input[type="range"]:disabled {
 .profile-row-labels {
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
   font-size: 0.625rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -398,7 +397,7 @@ input[type="range"]:disabled {
 }
 
 .prow-label {
-  height: 28px;
+  height: 32px;
   display: flex;
   align-items: center;
 }
@@ -435,7 +434,7 @@ input[type="range"]:disabled {
 }
 
 .pcol-cell {
-  height: 28px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -464,7 +463,7 @@ input[type="range"]:disabled {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 8px;
-  padding: 4px 6px;
+  padding: 0 6px;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -475,15 +474,15 @@ input[type="range"]:disabled {
 .padj-grid {
   display: grid;
   grid-template-columns: 2.25rem 1fr 1fr;
-  grid-auto-rows: 1fr;
-  gap: 4px;
+  grid-auto-rows: 32px;
+  gap: 0 4px;
   align-items: center;
 }
 
 .padj-side {
   display: grid;
-  grid-template-rows: repeat(3, 1fr);
-  gap: 4px;
+  grid-template-rows: repeat(3, 32px);
+  gap: 0;
   align-items: stretch;
 }
 
