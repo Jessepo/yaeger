@@ -154,7 +154,7 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         resultData["pidKp"] = preferences->getFloat(pidPKey, 1.0);
         resultData["pidKi"] = preferences->getFloat(pidIKey, 0.1);
         resultData["pidKd"] = preferences->getFloat(pidDKey, 0.01);
-        resultData["cooldownFanSpeed"] = preferences->getLong(coolingFanKey, 65);
+        resultData["cooldownFanSpeed"] = preferences->getLong(coolingFanKey, 50);
 
         char buffer[200]; // create temp buffer
         serializeJson(doc, buffer); // serialize to buffer

@@ -14,6 +14,8 @@ export type YaegerMessage = {
   pidKi?: number;
   pidKd?: number;
   wifiStrength?: number;
+  type?: string;
+  cooldownFanSpeed?: number;
 }
 
 export class YaegerState  {

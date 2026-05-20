@@ -40,6 +40,7 @@ const currentROR = van.state<number | null>(null);
 const currentMode = van.state<"Manual" | "PID">("Manual");
 const currentTarget = van.state<"BT" | "ET">("BT");
 const fanOffset = van.state(0);
+const cooldownFanSpeed = van.state(50);
 const wifiSSID = van.state("");
 const wifiPass = van.state("");
 const wifiMessage = van.state("");
@@ -78,8 +79,20 @@ van.derive(() => {
   });
   
   if (message != undefined && timestamp != null) {
+    // Preferences response: just absorb the values, don't run status-update logic
+    if (message.type === "preferences") {
+      if (typeof message.pidKp === "number") { pidPFactor.val = message.pidKp; tempP = message.pidKp; }
+      if (typeof message.pidKi === "number") { pidIFactor.val = message.pidKi; tempI = message.pidKi; }
+      if (typeof message.pidKd === "number") { pidDFactor.val = message.pidKd; tempD = message.pidKd; }
+      if (typeof message.cooldownFanSpeed === "number") {
+        cooldownFanSpeed.val = message.cooldownFanSpeed;
+        tempCooldownFan = message.cooldownFanSpeed;
+      }
+      return;
+    }
+
     console.log("Processing new message:", message);
-    
+
     // Update UI elements directly
     console.log("Updating sliders:", {
       fan: message.FanVal,
@@ -409,6 +422,7 @@ const UploadRoastInput = () => {
 let tempP = pidPFactor.val;
 let tempI = pidIFactor.val;
 let tempD = pidDFactor.val;
+let tempCooldownFan = cooldownFanSpeed.val;
 
 
 // Load saved roasts from device
@@ -561,6 +575,22 @@ const PIDConfig = () =>
         },
       }),
     ),
+    div(
+      { class: "pid-field" },
+      label({ class: "pid-label" }, "Cool Fan %"),
+      input({
+        type: "number",
+        class: "pid-input",
+        step: "5",
+        min: "0",
+        max: "100",
+        value: () => cooldownFanSpeed.val,
+        oninput: (e: Event) => {
+          tempCooldownFan =
+            parseInt((e.target as HTMLInputElement).value, 10) || 0;
+        },
+      }),
+    ),
     button(
       {
         class: "pid-apply",
@@ -568,12 +598,14 @@ const PIDConfig = () =>
           pidPFactor.val = tempP;
           pidIFactor.val = tempI;
           pidDFactor.val = tempD;
+          cooldownFanSpeed.val = tempCooldownFan;
           sendCommand({
             id: 1,
             command: "setPreferences",
             pidKp: tempP,
             pidKi: tempI,
             pidKd: tempD,
+            cooldownFanSpeed: tempCooldownFan,
           });
         },
       },
@@ -626,10 +658,11 @@ function setTarget(t: "BT" | "ET") {
 }
 
 function coolDown() {
+  const fanSpeed = cooldownFanSpeed.val;
   setMode("Manual");
-  updateFanPower(100);
+  updateFanPower(fanSpeed);
   updateHeaterPower(0);
-  slider1Value.val = 100;
+  slider1Value.val = fanSpeed;
   slider2Value.val = 0;
 }
 

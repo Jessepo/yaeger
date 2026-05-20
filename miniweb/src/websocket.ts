@@ -27,6 +27,8 @@ socket.onmessage = (event) => {
 socket.onopen = () => {
   console.log("WebSocket connection established");
   connectionStatus.val = "Connected";
+  // Pull stored preferences (PID gains, cooldown fan speed) once on connect.
+  socket.send(JSON.stringify({ id: 1, command: "getPreferences" }));
   startPeriodicWebSocketMessages(1000);
 };
 
