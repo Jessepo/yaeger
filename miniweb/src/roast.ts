@@ -898,7 +898,7 @@ const createApp = () => div(
         div({ class: "panel-title" }, "Readings"),
         div(
           { class: "readings-grid" },
-          ReadingCard("Exhaust", () => fmtTemp(currentMessage.val?.ET), "C"),
+          ReadingCard("Air", () => fmtTemp(currentMessage.val?.ET), "C"),
           ReadingCard("Bean", () => fmtTemp(currentMessage.val?.BT), "C"),
           ReadingCard(
             "ROR",
