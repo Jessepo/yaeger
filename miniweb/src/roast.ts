@@ -43,6 +43,7 @@ const currentMode = van.state<"Manual" | "PID">("Manual");
 const currentTarget = van.state<"BT" | "ET">("BT");
 const fanOffset = van.state(0);
 const cooldownFanSpeed = van.state(50);
+const roastName = van.state("");
 const fanMode = van.state<"pwm" | "ssr">("pwm");
 const fanModeChanged = van.state(false);  // shows reboot-needed notice when toggled
 const wifiSSID = van.state("");
@@ -190,6 +191,11 @@ van.derive(() => {
         if (profileUpdate != undefined) {
           console.log("Updating setpoint from profile:", profileUpdate.setPoint);
           setpoint.val = profileUpdate.setPoint;
+          // Push the new setpoint to firmware so the PID has something to
+          // track. Without this, fan would follow the profile (because
+          // updateFanPower below sends FanVal) but the heater would stay at
+          // 0 because firmware's setpoint never moves off its initial 0.
+          sendCommand({ id: 1, Setpoint: profileUpdate.setPoint });
           if (profileUpdate.fanValue != undefined) {
             const adjusted = Math.max(
               0,
@@ -281,10 +287,7 @@ function sendCommand(data: any) {
 
 var DownloadButton = () => {
   const shouldShowButton = van.derive(() => {
-    const c =
-      state.val.currentState.status == RoasterStatus.idle &&
-      (state.val.roast?.measurements.length ?? 0) > 0;
-    return !c;
+    return (state.val.roast?.measurements.length ?? 0) === 0;
   });
   return button(
     {
@@ -345,7 +348,7 @@ const SaveToDeviceButton = () => {
             setTimeout(() => { saveStatus.val = ""; }, 2000);
           }
         },
-        disabled: () => state.val.currentState.status !== RoasterStatus.idle || (state.val.roast?.measurements.length ?? 0) === 0,
+        disabled: () => (state.val.roast?.measurements.length ?? 0) === 0,
       },
       "💾 Save to Device",
     ),
@@ -453,9 +456,17 @@ async function loadSavedRoasts() {
 }
 
 // Load a roast from device storage
+// Strip any "/path/" prefix and ".json" suffix so we always send a clean
+// basename to the firmware — covers older firmware that returns full paths
+// in /api/roast/list.
+function cleanRoastName(n: string): string {
+  return n.replace(/^.*\//, "").replace(/\.json$/i, "");
+}
+
 async function loadRoastFromDevice(roastName: string) {
+  const clean = cleanRoastName(roastName);
   try {
-    const response = await fetch(`/api/roast/load?name=${encodeURIComponent(roastName)}`);
+    const response = await fetch(`/api/roast/load?name=${encodeURIComponent(clean)}`);
     if (response.ok) {
       const jsonData = await response.json();
       
@@ -477,20 +488,22 @@ async function loadRoastFromDevice(roastName: string) {
       updateChart(chart, state.val.roast!);
       console.log("Loaded roast from device:", roastName);
     } else {
-      alert("Failed to load roast");
+      const text = await response.text().catch(() => "");
+      alert(`Failed to load roast (${response.status}): ${text || "no detail"}`);
     }
   } catch (error) {
     console.error("Failed to load roast:", error);
-    alert("Error loading roast");
+    alert(`Error loading roast: ${(error as Error).message}`);
   }
 }
 
 // Delete a roast from device storage
 async function deleteRoastFromDevice(roastName: string) {
-  if (!confirm(`Delete "${roastName}"?`)) return;
-  
+  const clean = cleanRoastName(roastName);
+  if (!confirm(`Delete "${clean}"?`)) return;
+
   try {
-    const response = await fetch(`/api/roast/delete?name=${encodeURIComponent(roastName)}`, {
+    const response = await fetch(`/api/roast/delete?name=${encodeURIComponent(clean)}`, {
       method: "DELETE",
     });
     
@@ -530,7 +543,7 @@ const SavedRoastsList = () => {
                     onclick: () => loadRoastFromDevice(roast.name),
                     style: "flex: 1; padding: 0.375rem; font-size: 0.75rem;",
                   },
-                  roast.name,
+                  cleanRoastName(roast.name),
                 ),
                 button(
                   {
@@ -677,6 +690,48 @@ async function updateWifi() {
   }
 }
 
+function condensedTs(d: Date): string {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const M = months[d.getMonth()];
+  const D = d.getDate();
+  const hh = d.getHours().toString().padStart(2, "0");
+  const mm = d.getMinutes().toString().padStart(2, "0");
+  return `${M} ${D} · ${hh}:${mm}`;
+}
+
+// Roast title: a plain-looking inline input + a reactive timestamp span.
+// No reactive scope at the outer level — the <input> is created once and
+// never re-rendered, so focus survives state changes during a roast.
+// The input commits to roastName.val only on blur or Enter, so typing
+// doesn't fire keystroke-level state changes either.
+const RoastTitle = () =>
+  div(
+    { class: "topbar-roast-title" },
+    input({
+      type: "text",
+      class: "title-input-inline",
+      placeholder: "Roast name…",
+      value: () => roastName.val,
+      onblur: (e: Event) => {
+        roastName.val = (e.target as HTMLInputElement).value.trim();
+      },
+      onkeydown: (e: KeyboardEvent) => {
+        if (e.key === "Enter") {
+          (e.target as HTMLInputElement).blur();
+        } else if (e.key === "Escape") {
+          (e.target as HTMLInputElement).value = roastName.val;
+          (e.target as HTMLInputElement).blur();
+        }
+      },
+    }),
+    span(
+      { class: "title-ts" },
+      () =>
+        " · " +
+        condensedTs(state.val.roast?.startDate ?? new Date()),
+    ),
+  );
+
 function setMode(m: "Manual" | "PID") {
   currentMode.val = m;
   followProfileEnabled.val = m === "PID";
@@ -787,6 +842,7 @@ const createApp = () => div(
       }),
       span({ class: "conn-text" }, () => connectionStatus.val),
     ),
+    RoastTitle,
     div(
       { class: "topbar-clock" },
       () => (state.val.roast ? RoastTime() : "00:00"),

@@ -115,8 +115,8 @@ function computeSGKernel(windowSize: number, polyorder: number): number[] {
 const SG_KERNEL_BT = computeSGKernel(SG_WINDOW, SG_POLYORDER);
 // Wider kernel for ROR: BT noise gets amplified by differentiation, so a
 // second SG pass on the derived ROR keeps the line readable at the cost of
-// a few seconds of lag at the leading edge.
-const SG_KERNEL_ROR = computeSGKernel(41, SG_POLYORDER);
+// a few seconds of lag at the leading edge. 61 samples ≈ 6s @ 100ms tick.
+const SG_KERNEL_ROR = computeSGKernel(61, SG_POLYORDER);
 
 // Apply SG by convolution. Near the edges (window extends past data), we
 // re-normalize by the partial-sum of weights so the output stays in the
