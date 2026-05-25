@@ -1,6 +1,9 @@
 New Todo:
-
-1. Create a circular buffer on the device that stores the target profile loaded onto the screen in the miniweb webapp. The onboard PID will follow this profile (default BT) even when there is an interruption in the websocket connection. The app will automatically reconnect if there is an interruption and update with the current state of the roaster (time, temp, recoreded datapoints, etc.) only while a roast is in progress. The behavior of the PID and roaster is unchanged, but the webapp is no longer serving the targets over websocket commands, it's only recieving the recorded data. That way it can continue even if there is an interruption in service. Make sure the "all off" button is absolutely working at all times and if it is pressed while disconnected it will send the all off command first thing after reconnecting. 
+Goal: The device follows the profile with the PID even if the websocket is disconnected. The app automatically reconnects. If any of these have better alternatives, that is better. 
+- Create a circular buffer on the device that stores the target profile loaded onto the screen in the miniweb webapp. The onboard PID will follow this profile (default BT) even when there is an interruption in the websocket connection. 
+- Ensure the webapp will automatically reconnect if there is an interruption and update with the current state of the roaster (time, temp, recoreded datapoints, etc.) when a roast is in progress. 
+- The behavior of the PID and roaster is unchanged, but the webapp is no longer serving the targets over websocket commands, it's only recieving the recorded data. That way it can continue even if there is an interruption in service. 
+- Make sure the "all off" button is absolutely working at all times and if it is pressed while disconnected it will send the all off command first thing after reconnecting. 
 ---
 
 ## 5. Dedicated Raspberry Pi kiosk (planning only)
