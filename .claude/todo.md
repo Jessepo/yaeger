@@ -1,12 +1,6 @@
-1. the "follow profile checkbox in the profile container and the auto/manual on the top are redundent. Desired function is a single "PID On" and "PID Off" botton on top toggles the PID profile following on and off.
-2. Add an "all off" button on top. Disable PID, turn off heater, turn off fan
-3. When clicking on a saved profile, a "filed to load prifile" popup appears
-4. The BT rate of rise is way too erratic. At least double the filtering for this one, at the expense of adding a delay to the plot.
-All above here done
-5. The heater works, but the PID isn't controlling the heater. The slider isn't even moving on the app. The fan is running to the given profile just fine though (I'm in PWM mode)
-6. The BT rate of rise is still too eratic. Is it based on the smoothed BT or the real BT?
-7. Saved roasts does nothing
+New Todo:
 
+1. Create a circular buffer on the device that stores the target profile loaded onto the screen in the miniweb webapp. The onboard PID will follow this profile (default BT) even when there is an interruption in the websocket connection. The app will automatically reconnect if there is an interruption and update with the current state of the roaster (time, temp, recoreded datapoints, etc.) only while a roast is in progress. The behavior of the PID and roaster is unchanged, but the webapp is no longer serving the targets over websocket commands, it's only recieving the recorded data. That way it can continue even if there is an interruption in service. Make sure the "all off" button is absolutely working at all times and if it is pressed while disconnected it will send the all off command first thing after reconnecting. 
 ---
 
 ## 5. Dedicated Raspberry Pi kiosk (planning only)
