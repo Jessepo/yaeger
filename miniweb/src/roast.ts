@@ -419,6 +419,25 @@ const DownloadChartButton = () => {
   );
 };
 
+// Keep the first measurement that lands in each 1-second window.  Used to
+// shrink the on-device save: ~10x smaller files for the same wallclock
+// duration, since LittleFS partition space is the tightest resource.
+// The local browser buffer (Download JSON, chart) keeps full 10 Hz fidelity.
+function downsampleTo1Hz(roast: RoastState): RoastState {
+  if (!roast.measurements || roast.measurements.length === 0) return roast;
+  const startMs = roast.startDate.getTime();
+  const seen = new Set<number>();
+  const downsampled: Measurement[] = [];
+  for (const m of roast.measurements) {
+    const sec = Math.floor((m.timestamp.getTime() - startMs) / 1000);
+    if (!seen.has(sec)) {
+      seen.add(sec);
+      downsampled.push(m);
+    }
+  }
+  return { ...roast, measurements: downsampled };
+}
+
 const SaveToDeviceButton = () => {
   const saveStatus = van.state("");
   return div(
@@ -429,16 +448,19 @@ const SaveToDeviceButton = () => {
             alert("No roast data to save");
             return;
           }
-          
+
           const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "-");
-          const roastName = `roast-${timestamp}`;
-          
+          const baseName = roastName.val.trim() || "roast";
+          const saveName = `${baseName.replace(/\s+/g, "-")}-${timestamp}`;
+
           saveStatus.val = "Saving...";
-          
+
+          const payload = downsampleTo1Hz(state.val.roast);
+
           try {
-            const response = await fetch(`/api/roast/save?name=${encodeURIComponent(roastName)}`, {
+            const response = await fetch(`/api/roast/save?name=${encodeURIComponent(saveName)}`, {
               method: "POST",
-              body: JSON.stringify(state.val.roast),
+              body: JSON.stringify(payload),
               headers: { "Content-Type": "application/json" },
             });
             
