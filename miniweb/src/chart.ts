@@ -81,7 +81,7 @@ function invertMatrix(M: number[][]): number[][] {
   return a.map((row) => row.slice(n));
 }
 
-function computeSGKernel(windowSize: number, polyorder: number): number[] {
+export function computeSGKernel(windowSize: number, polyorder: number): number[] {
   const m = (windowSize - 1) / 2;
   const k = polyorder + 1;
   // ATA where A is the Vandermonde matrix of [-m..m] with columns 1, x, x^2, ...
@@ -121,7 +121,7 @@ const SG_KERNEL_ROR = computeSGKernel(61, SG_POLYORDER);
 // Apply SG by convolution. Near the edges (window extends past data), we
 // re-normalize by the partial-sum of weights so the output stays in the
 // right range rather than blending toward zero.
-function sgSmooth(data: number[], kernel: number[] = SG_KERNEL_BT): number[] {
+export function sgSmooth(data: number[], kernel: number[] = SG_KERNEL_BT): number[] {
   const m = (kernel.length - 1) / 2;
   const out = new Array(data.length);
   for (let i = 0; i < data.length; i++) {

@@ -12,11 +12,13 @@ import {
   followProfile,
   followProfileEnabled,
   profile,
+  profileName,
   ProfileControl,
   ProfileEditor,
   selectedPointTime,
   pointsFromProfile,
   profileFromPoints,
+  roastToProfile,
 } from "./profiling.ts";
 import {
   lastMessage,
@@ -603,6 +605,63 @@ async function loadRoastFromDevice(roastName: string) {
   }
 }
 
+// Fetch a saved roast and convert it into a playable profile (smoothed BT
+// curve simplified via RDP + fan timeline from commands).  The new profile
+// becomes the active one immediately; user can tweak it in the editor and
+// either Start Roast or Save to Device to keep it.
+async function loadRoastAsProfileFromDevice(roastName: string) {
+  const clean = cleanRoastName(roastName);
+  try {
+    const response = await fetch(
+      `/api/roast/load?name=${encodeURIComponent(clean)}`,
+    );
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      alert(`Failed to load roast (${response.status}): ${text || "no detail"}`);
+      return;
+    }
+    const jsonData = await response.json();
+    // Revive Date objects so roastToProfile() can do arithmetic on them.
+    if (jsonData.measurements) {
+      jsonData.measurements = jsonData.measurements.map((m: any) => ({
+        ...m,
+        timestamp: new Date(m.timestamp),
+      }));
+    }
+    if (jsonData.events) {
+      jsonData.events = jsonData.events.map((e: any) => ({
+        ...e,
+        measurement: {
+          ...e.measurement,
+          timestamp: new Date(e.measurement.timestamp),
+        },
+      }));
+    }
+    if (jsonData.commands) {
+      jsonData.commands = jsonData.commands.map((c: any) => ({
+        ...c,
+        timestamp: new Date(c.timestamp),
+      }));
+    }
+    if (jsonData.startDate) {
+      jsonData.startDate = new Date(jsonData.startDate);
+    }
+
+    const points = roastToProfile(jsonData);
+    if (points.length === 0) {
+      alert("Couldn't derive a profile from this roast (no measurements).");
+      return;
+    }
+    const newProfile = profileFromPoints(points);
+    profile.val = newProfile;
+    profileName.val = `${clean}-from-roast`;
+    console.log(`Converted "${clean}" to a ${points.length}-point profile.`);
+  } catch (error) {
+    console.error("Failed to convert roast to profile:", error);
+    alert(`Error converting roast: ${(error as Error).message}`);
+  }
+}
+
 // Delete a roast from device storage
 async function deleteRoastFromDevice(roastName: string) {
   const clean = cleanRoastName(roastName);
@@ -647,16 +706,24 @@ const SavedRoastsList = () => {
                 button(
                   {
                     onclick: () => loadRoastFromDevice(roast.name),
-                    style: "flex: 1; padding: 0.375rem; font-size: 0.75rem;",
+                    style: "flex: 1; padding: 0.375rem; font-size: 0.75rem; text-align: left;",
                   },
                   cleanRoastName(roast.name),
+                ),
+                button(
+                  {
+                    onclick: () => loadRoastAsProfileFromDevice(roast.name),
+                    style: "padding: 0.375rem 0.5rem; font-size: 0.75rem;",
+                    title: "Convert smoothed BT curve to a follow-able profile",
+                  },
+                  "→ Profile",
                 ),
                 button(
                   {
                     onclick: () => {
                       deleteRoastFromDevice(roast.name);
                     },
-                    style: "padding: 0.375rem 0.5rem; background: #ef4444; font-size: 0.75rem;",
+                    style: "padding: 0.375rem 0.5rem; background: var(--danger); color: var(--bg-0); border-color: var(--danger); font-size: 0.75rem;",
                   },
                   "✕",
                 ),

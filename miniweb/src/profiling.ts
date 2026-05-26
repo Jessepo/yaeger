@@ -2,10 +2,11 @@ import van from "vanjs-core";
 const { label, button, div, input, select, option, canvas, p, span, table, thead, tbody, tr, th, td } = van.tags;
 
 import { Profile, ProfileStep, RoastState } from "./model";
+import { sgSmooth, computeSGKernel } from "./chart";
 
 export const profile = van.state<Profile | undefined>();
 export const followProfileEnabled = van.state(true);
-const profileName = van.state("");
+export const profileName = van.state("");
 
 export function followProfile(
   profile: Profile,
@@ -632,3 +633,147 @@ const UploadProfileInput = () => {
 
   return fileInput;
 };
+
+// ============================================================================
+// Convert a saved roast into a playable profile.  Workflow: smooth the
+// recorded BT curve with a wide SG kernel, simplify to a sparse polyline
+// via Ramer–Douglas–Peucker, then attach a fan timeline pulled from the
+// roast's commands[] (or sampled FanVal as a fallback).
+// ============================================================================
+
+// Perpendicular distance from `pt` to the line through `a`–`b`.
+function perpDistance(pt: [number, number], a: [number, number], b: [number, number]): number {
+  const [px, py] = pt;
+  const [ax, ay] = a;
+  const [bx, by] = b;
+  if (ax === bx && ay === by) return Math.hypot(px - ax, py - ay);
+  const dx = bx - ax;
+  const dy = by - ay;
+  const norm = Math.hypot(dx, dy);
+  return Math.abs(dy * px - dx * py + bx * ay - by * ax) / norm;
+}
+
+// Ramer–Douglas–Peucker polyline simplification.  Returns a subset of the
+// input points such that none of the removed points sit further than
+// `epsilon` (in the y-axis units) from the line connecting their
+// neighbours in the reduced set.
+export function rdpSimplify(
+  points: [number, number][],
+  epsilon: number,
+): [number, number][] {
+  if (points.length < 3) return points.slice();
+  let maxDist = 0;
+  let maxIdx = 0;
+  const first = points[0];
+  const last = points[points.length - 1];
+  for (let i = 1; i < points.length - 1; i++) {
+    const d = perpDistance(points[i], first, last);
+    if (d > maxDist) {
+      maxDist = d;
+      maxIdx = i;
+    }
+  }
+  if (maxDist > epsilon) {
+    const left = rdpSimplify(points.slice(0, maxIdx + 1), epsilon);
+    const right = rdpSimplify(points.slice(maxIdx), epsilon);
+    return left.slice(0, -1).concat(right);
+  }
+  return [first, last];
+}
+
+export interface RoastToProfileOptions {
+  epsilonC?: number;        // RDP tolerance in °C (default 2.5)
+  smoothingWindow?: number; // SG window size, must be odd (default 61)
+  trimToEvents?: boolean;   // clip to charge→drop if those events exist
+}
+
+export function roastToProfile(
+  roast: RoastState,
+  options: RoastToProfileOptions = {},
+): ProfilePoint[] {
+  const eps = options.epsilonC ?? 2.5;
+  const win = options.smoothingWindow ?? 61;
+  const trim = options.trimToEvents ?? true;
+
+  if (!roast.measurements || roast.measurements.length === 0) return [];
+
+  const startMs = roast.startDate.getTime();
+
+  // Optional trim to charge → drop so the new profile is executable from
+  // the moment beans go in, without the cold-start warmup.
+  let trimStartSec = 0;
+  let trimEndSec = Number.POSITIVE_INFINITY;
+  if (trim && roast.events && roast.events.length > 0) {
+    for (const e of roast.events) {
+      const lbl = String(e.label).toLowerCase();
+      const tSec = (e.measurement.timestamp.getTime() - startMs) / 1000;
+      if (lbl.includes("charge")) trimStartSec = tSec;
+      if (lbl === "drop" || lbl.startsWith("drop")) trimEndSec = tSec;
+    }
+  }
+
+  // Gather (relative time, BT) within the trim window. Time origin = first
+  // sample after trimStartSec so the profile starts at t=0.
+  const times: number[] = [];
+  const bts: number[] = [];
+  for (const m of roast.measurements) {
+    const tAbs = (m.timestamp.getTime() - startMs) / 1000;
+    if (tAbs < trimStartSec || tAbs > trimEndSec) continue;
+    times.push(tAbs - trimStartSec);
+    bts.push(m.message.BT);
+  }
+  if (bts.length === 0) return [];
+
+  // Smooth BT with a wider kernel than the live chart uses — we're not
+  // racing the leading edge, so we can afford more filtering.
+  const kernel = computeSGKernel(win, 2);
+  const smoothed = sgSmooth(bts, kernel);
+
+  // RDP on the smoothed curve.
+  const dense: [number, number][] = times.map((t, i) => [t, smoothed[i]]);
+  const reduced = rdpSimplify(dense, eps);
+
+  // Build a step-style fan lookup from roast.commands[] (each "fan" command
+  // is a discrete change-point with a timestamp). Falls back to sampling
+  // measurement.FanVal at the requested time when no fan commands recorded.
+  const fanCommands = (roast.commands || [])
+    .filter((c) => c.type === "fan")
+    .map((c) => ({
+      tSec: (c.timestamp.getTime() - startMs) / 1000 - trimStartSec,
+      value: c.value,
+    }))
+    .filter((c) => c.tSec >= 0)
+    .sort((a, b) => a.tSec - b.tSec);
+
+  function fanAt(tSec: number): number | undefined {
+    if (fanCommands.length > 0) {
+      let last: number | undefined;
+      for (const c of fanCommands) {
+        if (c.tSec <= tSec) last = c.value;
+        else break;
+      }
+      return last;
+    }
+    // Fallback: nearest measurement's FanVal.
+    if (times.length === 0) return undefined;
+    let bestIdx = 0;
+    let bestDiff = Math.abs(times[0] - tSec);
+    for (let i = 1; i < times.length; i++) {
+      const d = Math.abs(times[i] - tSec);
+      if (d < bestDiff) {
+        bestDiff = d;
+        bestIdx = i;
+      }
+    }
+    return roast.measurements[bestIdx].message.FanVal;
+  }
+
+  return reduced.map(([t, sp]) => {
+    const fanVal = fanAt(t);
+    return {
+      time: Math.max(0, Math.round(t * 10) / 10),
+      setpoint: Math.round(sp * 10) / 10,
+      fan: fanVal != null ? Math.round(fanVal) : undefined,
+    };
+  });
+}
