@@ -15,8 +15,17 @@ import {
   ProfileControl,
   ProfileEditor,
   selectedPointTime,
+  pointsFromProfile,
+  profileFromPoints,
 } from "./profiling.ts";
-import { socket, lastMessage, lastUpdate, connectionStatus } from "./websocket";
+import {
+  lastMessage,
+  lastUpdate,
+  connectionStatus,
+  pendingCommandCount,
+  reconnectTick,
+  sendCommand,
+} from "./websocket";
 
 const { label, button, div, input, span, h1, details, summary, header } = van.tags;
 
@@ -64,6 +73,24 @@ van.derive(() => {
   highlightTime(chart, selectedPointTime.val);
 });
 
+// Mirror profile edits to firmware while a roast is running.  Skip the
+// initial mount (profile.val is undefined then) and don't bother when
+// the roast isn't active — Start Roast will push the full profile.
+let lastMirroredProfile: typeof profile.val | undefined = undefined;
+van.derive(() => {
+  const p = profile.val;
+  if (p === lastMirroredProfile) return;
+  lastMirroredProfile = p;
+  if (!p) return;
+  if (state.val.currentState.status !== RoasterStatus.roasting) return;
+  const pts = pointsFromProfile(p).map((q) => ({
+    time: q.time,
+    setpoint: q.setpoint,
+    fan: q.fan,
+  }));
+  sendCommand({ id: 1, command: "updateActiveProfile", points: pts });
+});
+
 // Add a derived state for current message
 const currentMessage = van.derive(() => {
   console.log("currentMessage derived state updated:", lastMessage.val);
@@ -102,6 +129,84 @@ van.derive(() => {
         fanMode.val = message.fanMode;
         // Server is source of truth on boot; clear the "reboot needed" flag.
         fanModeChanged.val = false;
+      }
+      return;
+    }
+
+    // Roast state snapshot: sent on (re)connect via getRoastState.  If
+    // firmware says it's actively following a profile, sync our local
+    // state machine so the dashboard reflects the live roast.
+    if (message.type === "roastState") {
+      const m = message as unknown as {
+        following: boolean;
+        roastElapsedSec: number;
+        fanOffset?: number;
+        profile?: Array<{ time: number; setpoint: number; fan?: number }>;
+      };
+      if (typeof m.fanOffset === "number") fanOffset.val = m.fanOffset;
+      if (m.profile && m.profile.length > 0) {
+        // Convert firmware's absolute-time points back to the local
+        // {steps: [...]} Profile shape so updateProfileLines + UI work.
+        const points = m.profile.map((p) => ({
+          time: p.time,
+          setpoint: p.setpoint,
+          fan: p.fan,
+        }));
+        profile.val = profileFromPoints(points);
+      }
+      if (m.following && state.val.currentState.status !== RoasterStatus.roasting) {
+        const startMs = timestamp.getTime() - Math.round(m.roastElapsedSec * 1000);
+        state.val = {
+          ...state.val,
+          currentState: { ...state.val.currentState, status: RoasterStatus.roasting },
+          roast: {
+            startDate: new Date(startMs),
+            measurements: [],
+            events: [],
+            commands: [],
+          },
+          profile: profile.val,
+        };
+        // Pull the 1Hz backfill.
+        sendCommand({ id: 1, command: "getRoastHistory" });
+      } else if (!m.following && state.val.currentState.status === RoasterStatus.roasting) {
+        // Firmware ended the roast while we were away.
+        state.val = {
+          ...state.val,
+          currentState: { ...state.val.currentState, status: RoasterStatus.idle },
+        };
+      }
+      return;
+    }
+
+    // Backfill history: replace measurements with the firmware's 1Hz log.
+    if (message.type === "roastHistory") {
+      const m = message as unknown as {
+        samples: Array<{ t: number; et: number; bt: number; sp: number; fan: number; bur: number }>;
+      };
+      if (state.val.roast) {
+        const startMs = state.val.roast.startDate.getTime();
+        const backfilled: Measurement[] = m.samples.map((s) => ({
+          timestamp: new Date(startMs + s.t * 1000),
+          message: {
+            ET: s.et,
+            BT: s.bt,
+            FanVal: s.fan,
+            BurnerVal: s.bur,
+            Amb: 0,
+            id: 0,
+            Setpoint: s.sp,
+          },
+          extra: {
+            setpoint: s.sp,
+            pidData: { enabled: true, kp: pidPFactor.val, ki: pidIFactor.val, kd: pidDFactor.val },
+          },
+        }));
+        state.val = {
+          ...state.val,
+          roast: { ...state.val.roast, measurements: backfilled },
+        };
+        updateChart(chart, state.val.roast!);
       }
       return;
     }
@@ -178,34 +283,9 @@ van.derive(() => {
 
       // Update chart with new data
       updateChart(chart, newState.roast);
-
-      // Check profile following
-      if (
-        state.val.profile != undefined &&
-        followProfileEnabled.val == true
-      ) {
-        const profileUpdate = followProfile(
-          state.val.profile!,
-          newState.roast,
-        );
-        if (profileUpdate != undefined) {
-          console.log("Updating setpoint from profile:", profileUpdate.setPoint);
-          setpoint.val = profileUpdate.setPoint;
-          // Push the new setpoint to firmware so the PID has something to
-          // track. Without this, fan would follow the profile (because
-          // updateFanPower below sends FanVal) but the heater would stay at
-          // 0 because firmware's setpoint never moves off its initial 0.
-          sendCommand({ id: 1, Setpoint: profileUpdate.setPoint });
-          if (profileUpdate.fanValue != undefined) {
-            const adjusted = Math.max(
-              0,
-              Math.min(100, profileUpdate.fanValue + fanOffset.val),
-            );
-            slider1Value.val = adjusted;
-            updateFanPower(adjusted);
-          }
-        }
-      }
+      // Firmware now drives the profile autonomously, so no client-side
+      // followProfile() call here.  Setpoint/fan changes arrive via
+      // status messages (handled above by the message.Setpoint sync).
     }
 
     // Update state atomically
@@ -279,10 +359,10 @@ function appendEvent(label: string) {
   };
 }
 
-function sendCommand(data: any) {
-  let msg = JSON.stringify(data);
-  console.log("sending command: ", msg);
-  socket?.send(msg);
+function downloadFilename(ext: string): string {
+  const baseName = roastName.val.trim() || "roast";
+  const ts = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
+  return `${baseName.replace(/\s+/g, "-")}-${ts}.${ext}`;
 }
 
 var DownloadButton = () => {
@@ -292,7 +372,6 @@ var DownloadButton = () => {
   return button(
     {
       onclick: () => {
-        console.log("download");
         const blob = new Blob([JSON.stringify(state.val.roast!)], {
           type: "application/json",
         });
@@ -300,14 +379,41 @@ var DownloadButton = () => {
 
         const a = document.createElement("a");
         a.href = url;
-        a.download = "roast.json";
+        a.download = downloadFilename("json");
         a.click();
 
         URL.revokeObjectURL(url);
       },
       disabled: () => shouldShowButton.val,
     },
-    "Download",
+    "Download JSON",
+  );
+};
+
+const DownloadChartButton = () => {
+  const disabled = van.derive(() => {
+    return (state.val.roast?.measurements.length ?? 0) === 0;
+  });
+  return button(
+    {
+      onclick: () => {
+        // ECharts emits a PNG data URL of the current chart at the requested
+        // pixel ratio.  2x for a crisp screenshot.
+        const dataUrl = (chart as unknown as {
+          getDataURL: (opts: object) => string;
+        }).getDataURL({
+          type: "png",
+          pixelRatio: 2,
+          backgroundColor: "#38424e",
+        });
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = downloadFilename("png");
+        a.click();
+      },
+      disabled: () => disabled.val,
+    },
+    "Download PNG",
   );
 };
 
@@ -739,9 +845,14 @@ function setMode(m: "Manual" | "PID") {
 }
 
 function allOff() {
-  setMode("Manual");
-  updateFanPower(0);
-  updateHeaterPower(0);
+  // The firmware-side allOff handler atomically: stops profile following,
+  // switches to Manual, zeros heater and fan.  sendCommand() puts this
+  // at the front of the queue if we're disconnected, so it's the first
+  // thing to land when the link returns.
+  sendCommand({ id: 1, command: "allOff" });
+  // Optimistic local update so the UI reflects it immediately.
+  currentMode.val = "Manual";
+  followProfileEnabled.val = false;
   slider1Value.val = 0;
   slider2Value.val = 0;
 }
@@ -963,6 +1074,7 @@ const createApp = () => div(
                 step: 5,
                 onChange: (v) => {
                   fanOffset.val = v;
+                  sendCommand({ id: 1, command: "setFanOffset", value: v });
                 },
               })
             : Slider({
@@ -1090,6 +1202,7 @@ const createApp = () => div(
       div(
         { class: "roast-io" },
         DownloadButton,
+        DownloadChartButton,
         SaveToDeviceButton,
         UploadButton,
       ),
@@ -1102,6 +1215,18 @@ const createApp = () => div(
 function toggleRoastStart() {
   switch (state.val.currentState.status) {
     case RoasterStatus.idle:
+      // Push the active profile to firmware, then ask it to start.  Firmware
+      // owns the roast clock + setpoint interpolation from here on; the web
+      // just optimistically mirrors the state.
+      if (profile.val) {
+        const pts = pointsFromProfile(profile.val).map((p) => ({
+          time: p.time,
+          setpoint: p.setpoint,
+          fan: p.fan,
+        }));
+        sendCommand({ id: 1, command: "setActiveProfile", points: pts });
+      }
+      sendCommand({ id: 1, command: "startRoast" });
       state.val = {
         ...state.val,
         currentState: {
@@ -1118,6 +1243,7 @@ function toggleRoastStart() {
       };
       break;
     case RoasterStatus.roasting:
+      sendCommand({ id: 1, command: "endRoast" });
       state.val = {
         ...state.val,
         currentState: {
