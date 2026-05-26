@@ -1,10 +1,20 @@
-New Todo:
-Goal: The device follows the profile with the PID even if the websocket is disconnected. The app automatically reconnects. If any of these have better alternatives, that is better. 
-- Create a circular buffer on the device that stores the target profile loaded onto the screen in the miniweb webapp. The onboard PID will follow this profile (default BT) even when there is an interruption in the websocket connection. 
-- Ensure the webapp will automatically reconnect if there is an interruption and update with the current state of the roaster (time, temp, recoreded datapoints, etc.) when a roast is in progress. 
-- The behavior of the PID and roaster is unchanged, but the webapp is no longer serving the targets over websocket commands, it's only recieving the recorded data. That way it can continue even if there is an interruption in service. 
-- Make sure the "all off" button is absolutely working at all times and if it is pressed while disconnected it will send the all off command first thing after reconnecting. 
----
+New Todo based on serial output:
+Roast started
+1] Disconnected!
+ge(): [/ws][1] Too many messages queued: closing connection
+2] Connected!
+ nvs_get_blob len fail: pidK NOT_FOUND
+en fail: pidI NOT_FOUND
+en fail: pidD NOT_FOUND
+l: fanMode NOT_FOUND
+hermocouple fault(s) detected on sensor Exhaust! Error: 4
+[Exhaust]: Thermocouple is short-circuited to VCC.
+hermocouple fault(s) detected on sensor Exhaust! Error: 4
+[Exhaust]: Thermocouple is short-circuited to VCC.
+oast ended
+ll off
+2] Disconnected!
+ge(): [/ws][2] Too many messages queued: closing connection
 
 ## 5. Dedicated Raspberry Pi kiosk (planning only)
 
