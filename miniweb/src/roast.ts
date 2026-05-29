@@ -1282,6 +1282,58 @@ const createApp = () => div(
           ReadingCard("Setpoint", () => setpoint.val.toFixed(1), "°C"),
         ),
       ),
+      // Events panel under Readings.  Buttons are 2-across, 3 rows, and
+      // color-coded along the bean-color progression (green raw -> brown
+      // medium -> near-black post-drop).
+      div(
+        { class: "panel-section" },
+        div({ class: "panel-title" }, "Events"),
+        div(
+          { class: "event-grid" },
+          button(
+            {
+              class: "event-btn event-charge",
+              onclick: () => appendEvent("charge"),
+            },
+            "Charge",
+          ),
+          button(
+            {
+              class: "event-btn event-dry",
+              onclick: () => appendEvent("dry-end"),
+            },
+            "Dry End",
+          ),
+          button(
+            {
+              class: "event-btn event-crack1",
+              onclick: () => appendEvent("first-crack-start"),
+            },
+            "1st Crack",
+          ),
+          button(
+            {
+              class: "event-btn event-crack1-end",
+              onclick: () => appendEvent("first-crack-end"),
+            },
+            "1st End",
+          ),
+          button(
+            {
+              class: "event-btn event-crack2",
+              onclick: () => appendEvent("second-crack-start"),
+            },
+            "2nd Crack",
+          ),
+          button(
+            {
+              class: "event-btn event-drop",
+              onclick: () => appendEvent("drop"),
+            },
+            "Drop",
+          ),
+        ),
+      ),
     ),
     div(
       { class: "dashboard-panel-right" },
@@ -1388,28 +1440,6 @@ const createApp = () => div(
             },
             "ET",
           ),
-        ),
-      ),
-      div(
-        { class: "panel-section" },
-        div({ class: "panel-title" }, "Events"),
-        div(
-          { class: "event-grid" },
-          button({ onclick: () => appendEvent("charge") }, "Charge"),
-          button({ onclick: () => appendEvent("dry-end") }, "Dry End"),
-          button(
-            { onclick: () => appendEvent("first-crack-start") },
-            "1st Crack",
-          ),
-          button(
-            { onclick: () => appendEvent("first-crack-end") },
-            "1st End",
-          ),
-          button(
-            { onclick: () => appendEvent("second-crack-start") },
-            "2nd Crack",
-          ),
-          button({ onclick: () => appendEvent("drop") }, "Drop"),
         ),
       ),
     ),

@@ -303,7 +303,7 @@ input[type="range"]:disabled {
 .btn-action {
   padding: 0.25rem 0.375rem;
   font-weight: 600;
-  font-size: 0.625rem;
+  font-size: 0.725rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   /* Narrow buttons that force multi-word labels to stack on two lines.
@@ -722,17 +722,17 @@ input[type="range"]:disabled {
 .readings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 4px;
 }
 
 .reading-card {
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  padding: 6px 9px;
+  padding: 4px 8px;
   /* Fixed width so digits changing (e.g., 99.0 -> 100.0) don't reflow
      surrounding cells.  Tuned to fit "999.9°C" comfortably. */
-  min-width: 8.5rem;
+  min-width: 7rem;
 }
 
 .reading-label {
@@ -741,12 +741,12 @@ input[type="range"]:disabled {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-3);
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .reading-value {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 1.25rem;
+  font-size: 1.28rem;
   font-weight: 700;
   color: var(--accent);
   line-height: 1.1;
@@ -759,7 +759,7 @@ input[type="range"]:disabled {
 }
 
 .reading-unit {
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   font-weight: 500;
   color: var(--text-2);
   letter-spacing: 0.02em;
@@ -785,13 +785,13 @@ input[type="range"]:disabled {
 }
 
 .control-label {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: var(--text-1);
 }
 
 .control-value {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8125rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--accent);
 }
@@ -831,13 +831,31 @@ input[type="range"]:disabled {
 
 .event-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
 }
 
-.event-grid button {
-  padding: 0.3125rem 0.25rem;
-  font-size: 0.6875rem;
+.event-btn {
+  padding: 0.375rem 0.375rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-0);
+  border-width: 1px;
+  border-style: solid;
+}
+
+/* Subtle bean-color progression: raw green -> yellowing -> browns ->
+   dark roast -> drop.  Backgrounds are intentionally muted so the
+   panel doesn't shout. */
+.event-charge      { background: #5b7c4d; border-color: #6f9460; }
+.event-dry         { background: #8a7d4f; border-color: #a09262; }
+.event-crack1      { background: #8b6e4f; border-color: #a18260; }
+.event-crack1-end  { background: #6e553c; border-color: #836b4f; }
+.event-crack2      { background: #5a3f2a; border-color: #735540; }
+.event-drop        { background: #3d2a1c; border-color: #5a3f2d; }
+
+.event-btn:hover:not(:disabled) {
+  filter: brightness(1.18);
 }
 
 /* ============================================================================
