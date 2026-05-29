@@ -293,6 +293,30 @@ void WSRequestHandler::loop() {
   if (millis() - _lastUpdate < 100)
     return; // Max update frequency 100ms
 
+  // No subscribers? Nothing to do.  Skipping saves a JSON serialize and
+  // avoids piling messages into the AsyncWebSocket queue of a client that
+  // disconnected ungracefully (which is what causes
+  // "Too many messages queued: closing connection" in the serial log).
+  if (this->ws->count() == 0) {
+    this->_lastUpdate = millis();
+    return;
+  }
+
+  // Backpressure check: if any connected client's tx queue is full, skip
+  // this status frame.  Better to drop a status update than to have the
+  // AsyncWebSocket library close the connection due to queue overflow.
+  bool backpressured = false;
+  for (const auto &c : this->ws->getClients()) {
+    if (c.queueIsFull()) {
+      backpressured = true;
+      break;
+    }
+  }
+  if (backpressured) {
+    this->_lastUpdate = millis();
+    return;
+  }
+
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
   JsonObject resultData = root["data"].to<JsonObject>();

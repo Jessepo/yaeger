@@ -301,11 +301,20 @@ input[type="range"]:disabled {
 }
 
 .btn-action {
-  padding: 0.375rem 0.75rem;
+  padding: 0.25rem 0.375rem;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
+  /* Narrow buttons that force multi-word labels to stack on two lines.
+     The button labels contain explicit "\n" between words; pre-line
+     preserves the newline as a line break. */
+  width: 4rem;
+  white-space: pre-line;
+  line-height: 1.15;
+  text-align: center;
+  /* Stop the inline-flex default from forcing the text onto one line. */
+  display: inline-block;
 }
 
 /* iOS-style toggle component. Used for PID On/Off and Fan Control. */
@@ -613,6 +622,18 @@ input[type="range"]:disabled {
   border-color: #82adcb;
 }
 
+/* Clear Reset — between Cool Down and All Off.  Neutral slate so it
+   doesn't compete with the alarming red of All Off. */
+.btn-reset {
+  background: var(--bg-3);
+  color: var(--text-0);
+  border-color: var(--text-3);
+}
+.btn-reset:hover:not(:disabled) {
+  background: var(--text-3);
+  color: var(--bg-0);
+}
+
 .btn-alloff {
   background: #fe5848;
   color: var(--bg-0);
@@ -638,13 +659,8 @@ input[type="range"]:disabled {
    Main split: chart + side panel
    ============================================================================ */
 
-.dashboard-main {
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 8px;
-  min-height: 0;
-}
-
+/* Stacked vertically for 1080x800 — chart, profile strip, then the
+   readings/controls panel below the strip. */
 .chart-area {
   background: var(--bg-1);
   border: 1px solid var(--border);
@@ -652,7 +668,27 @@ input[type="range"]:disabled {
   padding: 8px;
   box-shadow: var(--shadow-sm);
   display: flex;
-  min-height: 320px;
+  min-height: 300px;
+}
+
+.dashboard-panel {
+  display: grid;
+  grid-template-columns: 30% 1fr;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.dashboard-panel-left,
+.dashboard-panel-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 10px;
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
 }
 
 #liveChart {
@@ -662,19 +698,8 @@ input[type="range"]:disabled {
 }
 
 /* ============================================================================
-   Side panel
+   Side / dashboard panel
    ============================================================================ */
-
-.side-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--bg-1);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 10px;
-  box-shadow: var(--shadow-sm);
-}
 
 .panel-section + .panel-section {
   padding-top: 8px;
@@ -705,6 +730,9 @@ input[type="range"]:disabled {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   padding: 6px 9px;
+  /* Fixed width so digits changing (e.g., 99.0 -> 100.0) don't reflow
+     surrounding cells.  Tuned to fit "999.9°C" comfortably. */
+  min-width: 8.5rem;
 }
 
 .reading-label {
@@ -725,6 +753,9 @@ input[type="range"]:disabled {
   display: flex;
   align-items: baseline;
   gap: 3px;
+  /* Tabular nums keep each digit's column the same width so the value
+     doesn't shift as the number changes from "9.5" to "10.0". */
+  font-variant-numeric: tabular-nums;
 }
 
 .reading-unit {
@@ -964,10 +995,91 @@ input[type="range"]:disabled {
    Responsive
    ============================================================================ */
 
-@media (max-width: 1100px) {
-  .dashboard-main {
+@media (max-width: 720px) {
+  .dashboard-panel {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================================
+   Save-roast modal (post-cool-down)
+   ============================================================================ */
+
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: var(--bg-1);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  min-width: 360px;
+  max-width: 90vw;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  color: var(--text-0);
+}
+
+.modal-row {
+  margin-bottom: 12px;
+}
+
+.modal-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+}
+
+.modal-input {
+  font-size: 0.9375rem;
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+}
+
+.modal-status {
+  margin-top: 8px;
+  font-size: 0.8125rem;
+  color: var(--text-1);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modal-actions button {
+  flex: 1;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+}
+
+.modal-save-btn {
+  background: var(--success) !important;
+  color: var(--bg-0) !important;
+  border-color: var(--success) !important;
+}
+
+.modal-save-btn:hover:not(:disabled) {
+  background: #e5743a !important;
+  border-color: #e5743a !important;
 }
 
 @media (max-width: 720px) {

@@ -7,6 +7,11 @@ import { sgSmooth, computeSGKernel } from "./chart";
 export const profile = van.state<Profile | undefined>();
 export const followProfileEnabled = van.state(true);
 export const profileName = van.state("");
+// Bumped each time a profile is loaded from an external source (file
+// upload, device load, → Profile from a roast).  Subscribers (roast.ts)
+// use this to trigger a roast reset + auto-enable PID.  Editor edits do
+// NOT bump this — only fresh loads do.
+export const profileLoadTick = van.state(0);
 
 export function followProfile(
   profile: Profile,
@@ -147,6 +152,7 @@ async function loadProfileFromDevice(name: string) {
     }
     profileName.val = loaded.name ?? name;
     profile.val = loaded.profile;
+    profileLoadTick.val++;
   } catch (e) {
     alert(`Error loading profile: ${(e as Error).message}`);
   }
@@ -621,6 +627,7 @@ const UploadProfileInput = () => {
         }
         profileName.val = loaded.name ?? file.name;
         profile.val = loaded.profile;
+        profileLoadTick.val++;
         console.log("Profile loaded:", profileName.val, loaded.profile);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);

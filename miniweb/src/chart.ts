@@ -6,6 +6,7 @@ import {
   LegendComponent,
   DataZoomComponent,
   MarkLineComponent,
+  MarkPointComponent,
   type GridComponentOption,
   type TooltipComponentOption,
   type LegendComponentOption,
@@ -21,6 +22,7 @@ echarts.use([
   LegendComponent,
   DataZoomComponent,
   MarkLineComponent,
+  MarkPointComponent,
   CanvasRenderer,
 ]);
 
@@ -396,19 +398,44 @@ export function updateChart(chart: ChartInstance, roast: RoastState) {
     if (v != null) spData.push([times[i], v]);
   });
 
-  const markData = events.map((e) => ({
+  const markLineData = events.map((e) => ({
     name: e.label as string,
     xAxis: (e.measurement.timestamp.getTime() - startMs) / 1000,
     label: { formatter: e.label as string, color: "#f1f5f9", position: "end" as const },
     lineStyle: { color: "#f59e0b", type: "dashed" as const },
   }));
 
+  // markPoints sit on the BT line at the BT value when each event was
+  // recorded. Gives a visual anchor + the temperature at-a-glance for
+  // crack, drop, etc.
+  const markPointData = events.map((e) => {
+    const tSec = (e.measurement.timestamp.getTime() - startMs) / 1000;
+    const bt = e.measurement.message.BT;
+    return {
+      name: e.label as string,
+      coord: [tSec, bt] as [number, number],
+      symbol: "circle" as const,
+      symbolSize: 8,
+      itemStyle: { color: "#f59e0b", borderColor: "#fef3c7", borderWidth: 1.5 },
+      label: {
+        formatter: `${e.label} ${bt.toFixed(1)}°`,
+        position: "top" as const,
+        color: "#f1f5f9",
+        fontSize: 10,
+        backgroundColor: "rgba(245, 158, 11, 0.85)",
+        padding: [2, 4],
+        borderRadius: 3,
+      },
+    };
+  });
+
   chart.setOption({
     series: [
       {
         name: "BT",
         data: btData,
-        markLine: { silent: true, symbol: "none", data: markData },
+        markLine: { silent: true, symbol: "none", data: markLineData },
+        markPoint: { silent: true, data: markPointData },
       },
       { name: "ET", data: etData },
       { name: "BT ROR", data: rorData },

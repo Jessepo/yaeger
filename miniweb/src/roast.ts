@@ -13,6 +13,7 @@ import {
   followProfileEnabled,
   profile,
   profileName,
+  profileLoadTick,
   ProfileControl,
   ProfileEditor,
   selectedPointTime,
@@ -29,7 +30,7 @@ import {
   sendCommand,
 } from "./websocket";
 
-const { label, button, div, input, span, h1, details, summary, header } = van.tags;
+const { label, button, div, input, span, h1, h2, details, summary, header, img } = van.tags;
 
 // State variables
 const slider1Value = van.state(50);
@@ -57,6 +58,8 @@ const cooldownFanSpeed = van.state(50);
 const roastName = van.state("");
 const fanMode = van.state<"pwm" | "ssr">("pwm");
 const fanModeChanged = van.state(false);  // shows reboot-needed notice when toggled
+const cooling = van.state(false); // true between End Roast click and BT<50°C
+const showSaveModal = van.state(false);
 const wifiSSID = van.state("");
 const wifiPass = van.state("");
 const wifiMessage = van.state("");
@@ -73,6 +76,16 @@ van.derive(() => {
 // Move the chart's crosshair + tooltip to the selected profile point.
 van.derive(() => {
   highlightTime(chart, selectedPointTime.val);
+});
+
+// When a profile is *loaded* from outside the editor (file, device,
+// or → Profile from a saved roast), treat it like a Clear Reset and
+// auto-enable PID so the user is one click away from Start Roast.
+// Editor edits do NOT bump profileLoadTick, so they don't trigger this.
+van.derive(() => {
+  if (profileLoadTick.val <= 0) return; // skip the initial 0
+  resetRoast();
+  if (profile.val) setMode("PID");
 });
 
 // Mirror profile edits to firmware while a roast is running.  Skip the
@@ -392,6 +405,130 @@ var DownloadButton = () => {
   );
 };
 
+// Module-level state for the save modal so SaveRoastModal can be a
+// simple reactive function (returning a Node or null), the only kind
+// of "child function" VanJS handles correctly.
+const modalNameInput = van.state("");
+const modalStatus = van.state("");
+
+function closeSaveModal() {
+  showSaveModal.val = false;
+  modalStatus.val = "";
+}
+
+async function saveRoastBundle() {
+  const r = state.val.roast;
+  if (!r || r.measurements.length === 0) {
+    closeSaveModal();
+    return;
+  }
+  const name = (modalNameInput.val || roastName.val || "").trim();
+  if (!name) {
+    modalStatus.val = "Please enter a name first.";
+    return;
+  }
+  // Persist back to the dashboard's title so future actions inherit it.
+  roastName.val = name;
+  modalStatus.val = "Saving…";
+  const ts = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "-");
+  const saveName = `${name.replace(/\s+/g, "-")}-${ts}`;
+
+  try {
+    // 1. Save to device (1 Hz downsampled to keep LittleFS happy).
+    const payload = downsampleTo1Hz(r);
+    const resp = await fetch(
+      `/api/roast/save?name=${encodeURIComponent(saveName)}`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      modalStatus.val = `Save to device failed: ${text || resp.status}`;
+      return;
+    }
+
+    // 2. Download JSON locally (full 10 Hz).
+    const blob = new Blob([JSON.stringify(r)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a1 = document.createElement("a");
+    a1.href = url;
+    a1.download = `${saveName}.json`;
+    a1.click();
+    URL.revokeObjectURL(url);
+
+    // 3. Download chart PNG.
+    const dataUrl = (chart as unknown as {
+      getDataURL: (opts: object) => string;
+    }).getDataURL({
+      type: "png",
+      pixelRatio: 2,
+      backgroundColor: "#38424e",
+    });
+    const a2 = document.createElement("a");
+    a2.href = dataUrl;
+    a2.download = `${saveName}.png`;
+    a2.click();
+
+    modalStatus.val = "✓ Saved + downloaded";
+    setTimeout(closeSaveModal, 1200);
+  } catch (e) {
+    modalStatus.val = `Error: ${(e as Error).message}`;
+  }
+}
+
+// Reactive child function (returns Node | null).  VanJS calls this each
+// time showSaveModal.val changes and swaps the DOM accordingly.
+const SaveRoastModal = () =>
+  showSaveModal.val
+    ? div(
+        {
+          class: "modal-backdrop",
+          onclick: (e: Event) => {
+            if (
+              (e.target as HTMLElement).classList.contains("modal-backdrop")
+            ) {
+              closeSaveModal();
+            }
+          },
+        },
+        div(
+          { class: "modal" },
+          h2({ class: "modal-title" }, "Roast complete"),
+          div(
+            { class: "modal-row" },
+            label(
+              { class: "modal-label" },
+              "Roast name",
+              input({
+                type: "text",
+                class: "modal-input",
+                placeholder: "e.g., Ethiopia Yirgacheffe",
+                value: roastName.val || "",
+                oninput: (e: Event) => {
+                  modalNameInput.val = (e.target as HTMLInputElement).value;
+                },
+              }),
+            ),
+          ),
+          () =>
+            modalStatus.val
+              ? div({ class: "modal-status" }, modalStatus.val)
+              : null,
+          div(
+            { class: "modal-actions" },
+            button(
+              { class: "modal-save-btn", onclick: saveRoastBundle },
+              "Save + Download",
+            ),
+            button({ onclick: closeSaveModal }, "Close"),
+          ),
+        ),
+      )
+    : null;
+
 const DownloadChartButton = () => {
   const disabled = van.derive(() => {
     return (state.val.roast?.measurements.length ?? 0) === 0;
@@ -677,6 +814,7 @@ async function loadRoastAsProfileFromDevice(roastName: string) {
     const newProfile = profileFromPoints(points);
     profile.val = newProfile;
     profileName.val = `${clean}-from-roast`;
+    profileLoadTick.val++;
     console.log(`Converted "${clean}" to a ${points.length}-point profile.`);
   } catch (error) {
     console.error("Failed to convert roast to profile:", error);
@@ -757,10 +895,23 @@ const SavedRoastsList = () => {
 
 const PIDConfig = () =>
   div(
+    // PID On/Off (moved here from the top bar so the top bar can stay
+    // tight and operational on the smaller touchscreen).
     div(
-      {
-        class: "fan-mode-row",
-      },
+      { class: "fan-mode-row" },
+      span({ class: "toggle-row-label" }, "PID"),
+      button({
+        class: () => `toggle ${currentMode.val === "PID" ? "active" : ""}`,
+        onclick: () =>
+          setMode(currentMode.val === "PID" ? "Manual" : "PID"),
+      }),
+      span(
+        { class: "toggle-state-label" },
+        () => (currentMode.val === "PID" ? "ON" : "OFF"),
+      ),
+    ),
+    div(
+      { class: "fan-mode-row" },
       span({ class: "toggle-row-label" }, "Fan Control"),
       button({
         class: () => `toggle ${fanMode.val === "ssr" ? "active" : ""}`,
@@ -944,6 +1095,29 @@ function allOff() {
   followProfileEnabled.val = false;
   slider1Value.val = 0;
   slider2Value.val = 0;
+  cooling.val = false;
+}
+
+// Clear the local roast state and tell firmware to end any running roast.
+// Used by the "Clear Reset" top-bar button and by every profile-load path
+// so the chart is fresh and ready for the next Start Roast.
+function resetRoast() {
+  if (state.val.currentState.status === RoasterStatus.roasting) {
+    sendCommand({ id: 1, command: "endRoast" });
+  }
+  state.val = {
+    ...state.val,
+    currentState: { ...state.val.currentState, status: RoasterStatus.idle },
+    roast: undefined,
+  };
+  cooling.val = false;
+  // Empty chart (the if-empty branch in updateChart clears all series).
+  updateChart(chart, {
+    startDate: new Date(),
+    measurements: [],
+    events: [],
+    commands: [],
+  });
 }
 
 function setTarget(t: "BT" | "ET") {
@@ -1056,7 +1230,7 @@ const createApp = () => div(
             state.val.currentState.status !== RoasterStatus.idle,
           onclick: toggleRoastStart,
         },
-        "Start Roast",
+        "Start\nRoast",
       ),
       button(
         {
@@ -1065,34 +1239,34 @@ const createApp = () => div(
             state.val.currentState.status === RoasterStatus.idle,
           onclick: toggleRoastStart,
         },
-        "End Roast",
+        "End\nRoast",
       ),
       button(
         { class: "btn-action btn-cool", onclick: coolDown },
-        "Cool Down",
+        "Cool\nDown",
+      ),
+      button(
+        { class: "btn-action btn-reset", onclick: () => resetRoast() },
+        "Clear\nReset",
       ),
       button(
         { class: "btn-action btn-alloff", onclick: allOff },
-        "All Off",
-      ),
-      div(
-        { class: "toggle-row" },
-        span({ class: "toggle-row-label" }, "PID"),
-        button({
-          class: () => `toggle ${currentMode.val === "PID" ? "active" : ""}`,
-          onclick: () =>
-            setMode(currentMode.val === "PID" ? "Manual" : "PID"),
-        }),
+        "All\nOff",
       ),
     ),
   ),
 
-  // --- Main content: chart + right panel --------------------------------
+  // --- Chart (full width) ----------------------------------------------
+  div({ class: "chart-area" }, chartElement),
+
+  // --- Profile point editor (full-width row under the chart) -----------
+  div({ class: "profile-strip" }, ProfileEditor),
+
+  // --- Bottom dashboard panel: readings (30%) | controls + events (70%) -
   div(
-    { class: "dashboard-main" },
-    div({ class: "chart-area" }, chartElement),
+    { class: "dashboard-panel" },
     div(
-      { class: "side-panel" },
+      { class: "dashboard-panel-left" },
       div(
         { class: "panel-section" },
         div({ class: "panel-title" }, "Readings"),
@@ -1105,9 +1279,12 @@ const createApp = () => div(
             () => (currentROR.val != null ? currentROR.val.toFixed(1) : "—"),
             "°C/min",
           ),
-          ReadingCard("Setpoint", () => `${setpoint.val}`, "°C"),
+          ReadingCard("Setpoint", () => setpoint.val.toFixed(1), "°C"),
         ),
       ),
+    ),
+    div(
+      { class: "dashboard-panel-right" },
       div(
         { class: "panel-section" },
         div({ class: "panel-title" }, "Controls"),
@@ -1238,9 +1415,6 @@ const createApp = () => div(
     ),
   ),
 
-  // --- Profile point editor (full-width row under the chart) ------------
-  div({ class: "profile-strip" }, ProfileEditor),
-
   // --- Collapsible settings ---------------------------------------------
   div(
     { class: "settings-row" },
@@ -1299,6 +1473,9 @@ const createApp = () => div(
       UploadRoastInput,
     ),
   ),
+
+  // Post-cool-down save modal (overlay).
+  SaveRoastModal,
 );
 
 function toggleRoastStart() {
@@ -1332,21 +1509,46 @@ function toggleRoastStart() {
       };
       break;
     case RoasterStatus.roasting:
+      // End Roast: record a "drop" event (so the chart marks it), tell
+      // firmware to stop following the profile, and enter cool-down.
+      // We stay in roasting status while cooling so the chart keeps
+      // updating; resetRoast() / the save modal will move us to idle.
+      appendEvent("drop");
       sendCommand({ id: 1, command: "endRoast" });
-      state.val = {
-        ...state.val,
-        currentState: {
-          ...state.val.currentState,
-          status: RoasterStatus.idle,
-        },
-        roast: {
-          ...state.val.roast!,
-          profile: state.val.profile,
-        },
-      };
+      cooling.val = true;
+      // Cool-down: manual mode, heater off, fan to the saved cooldown speed.
+      setMode("Manual");
+      updateFanPower(cooldownFanSpeed.val);
+      updateHeaterPower(0);
+      slider1Value.val = cooldownFanSpeed.val;
+      slider2Value.val = 0;
       break;
   }
 }
+
+// Watch BT during cool-down: once it drops below 50 °C, exit cool-down,
+// All Off, and open the save modal.
+let coolDownTriggered = false;
+van.derive(() => {
+  const m = lastMessage.val;
+  if (!cooling.val) {
+    coolDownTriggered = false;
+    return;
+  }
+  if (coolDownTriggered) return;
+  if (m && typeof m.BT === "number" && m.BT < 50) {
+    coolDownTriggered = true;
+    cooling.val = false;
+    // Trigger All Off so the fan stops too.
+    sendCommand({ id: 1, command: "allOff" });
+    currentMode.val = "Manual";
+    followProfileEnabled.val = false;
+    slider1Value.val = 0;
+    slider2Value.val = 0;
+    // Open the save modal.
+    showSaveModal.val = true;
+  }
+});
 
 // Export the app for use in main.ts
 export const roastApp = createApp; 
