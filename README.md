@@ -1,6 +1,6 @@
 # Yaeger
 
-![yaeger logo](./assets/logo.webp)
+![yaeger logo](./assets/Jaegerv5.png)
 
 ## Yet another embedded gourmet experience roaster
 
@@ -9,7 +9,7 @@
 ## The gist
 
 Yaeger is an embedded computer that takes control of your "coffee roaster" via Artisan-Scope.
-It currently supports reading data from two temperature probes as well as controlling a fan and pulsing a heater.
+It currently supports reading data from two temperature probes as well as controlling a fan and pulsing a heater. This is a heavily modified version of the original Yaeger project. 
 
 ### Primary goal
 

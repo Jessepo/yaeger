@@ -60,6 +60,10 @@ const fanMode = van.state<"pwm" | "ssr">("pwm");
 const fanModeChanged = van.state(false);  // shows reboot-needed notice when toggled
 const cooling = van.state(false); // true between End Roast click and BT<50°C
 const showSaveModal = van.state(false);
+// Target BT for auto-drop while following a profile.  Once BT crosses this
+// value, the same code path as End Roast is fired (drop event + cool-down
+// + save modal at 50°C).  Default 230°C ≈ Vienna roast finish.
+const targetBT = van.state(230);
 const wifiSSID = van.state("");
 const wifiPass = van.state("");
 const wifiMessage = van.state("");
@@ -1408,19 +1412,39 @@ const createApp = () => div(
                 },
               });
         },
-        Slider({
-          label: "Setpoint",
-          unit: "°C",
-          state: setpoint,
-          min: 0,
-          max: 300,
-          step: 1,
-          disabled: () => followProfileEnabled.val,
-          onChange: (v) => {
-            setpoint.val = v;
-            sendCommand({ id: 1, Setpoint: v });
-          },
-        }),
+        // When following a profile under PID, the setpoint is driven by
+        // firmware-side interpolation — the user can't usefully adjust it
+        // here.  Repurpose the slider as "Target BT" so they can set the
+        // BT at which the roast auto-drops.  In any other mode it stays
+        // as a regular Setpoint slider.
+        () => {
+          const autoDropMode =
+            currentMode.val === "PID" && profile.val != null;
+          return autoDropMode
+            ? Slider({
+                label: "Target BT (auto-drop)",
+                unit: "°C",
+                state: targetBT,
+                min: 150,
+                max: 260,
+                step: 1,
+                onChange: (v) => {
+                  targetBT.val = v;
+                },
+              })
+            : Slider({
+                label: "Setpoint",
+                unit: "°C",
+                state: setpoint,
+                min: 0,
+                max: 300,
+                step: 1,
+                onChange: (v) => {
+                  setpoint.val = v;
+                  sendCommand({ id: 1, Setpoint: v });
+                },
+              });
+        },
         div(
           { class: "target-toggle" },
           span({ class: "target-label" }, "Target"),
@@ -1539,21 +1563,28 @@ function toggleRoastStart() {
       };
       break;
     case RoasterStatus.roasting:
-      // End Roast: record a "drop" event (so the chart marks it), tell
-      // firmware to stop following the profile, and enter cool-down.
-      // We stay in roasting status while cooling so the chart keeps
-      // updating; resetRoast() / the save modal will move us to idle.
-      appendEvent("drop");
-      sendCommand({ id: 1, command: "endRoast" });
-      cooling.val = true;
-      // Cool-down: manual mode, heater off, fan to the saved cooldown speed.
-      setMode("Manual");
-      updateFanPower(cooldownFanSpeed.val);
-      updateHeaterPower(0);
-      slider1Value.val = cooldownFanSpeed.val;
-      slider2Value.val = 0;
+      triggerDrop();
       break;
   }
+}
+
+// Drop sequence: record event, ask firmware to stop following, then enter
+// cool-down (Manual, heater 0, fan to cooldownFanSpeed).  We stay in
+// roasting status while cooling so the chart keeps updating; the BT<50
+// watcher and save modal handle the transition back to idle.
+//
+// Called from: End Roast button (toggleRoastStart) and the auto-drop
+// derive that watches BT reaching targetBT during a profile-followed roast.
+function triggerDrop() {
+  if (cooling.val) return; // already dropped + cooling, don't double-fire
+  appendEvent("drop");
+  sendCommand({ id: 1, command: "endRoast" });
+  cooling.val = true;
+  setMode("Manual");
+  updateFanPower(cooldownFanSpeed.val);
+  updateHeaterPower(0);
+  slider1Value.val = cooldownFanSpeed.val;
+  slider2Value.val = 0;
 }
 
 // Watch BT during cool-down: once it drops below 50 °C, exit cool-down,
@@ -1577,6 +1608,29 @@ van.derive(() => {
     slider2Value.val = 0;
     // Open the save modal.
     showSaveModal.val = true;
+  }
+});
+
+// Auto-drop: when in PID mode following a profile, if BT reaches the
+// user-set targetBT, fire triggerDrop() (same as the End Roast button).
+// Only arms once per roast — resets when the roast goes idle or once
+// the drop has been fired.
+let autoDropFired = false;
+van.derive(() => {
+  const m = lastMessage.val;
+  if (
+    state.val.currentState.status !== RoasterStatus.roasting ||
+    cooling.val
+  ) {
+    autoDropFired = false;
+    return;
+  }
+  if (autoDropFired) return;
+  if (currentMode.val !== "PID" || !profile.val) return;
+  if (!m || typeof m.BT !== "number") return;
+  if (m.BT >= targetBT.val) {
+    autoDropFired = true;
+    triggerDrop();
   }
 });
 
