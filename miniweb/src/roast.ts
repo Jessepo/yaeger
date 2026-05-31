@@ -1561,6 +1561,10 @@ function toggleRoastStart() {
         },
         profile: profile.val,
       };
+      // Auto-record the "charge" event so the chart marker lands at t=0.
+      // The empty roast above is already in place, so appendEvent's
+      // status / roast guards both pass.
+      appendEvent("charge");
       break;
     case RoasterStatus.roasting:
       triggerDrop();
