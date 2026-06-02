@@ -5,6 +5,7 @@ Smaller screen optimization
 3. Fan setpoints should be interpolated, not steps. Just like BT
 4. When I tried to mofify a roast as it was going, the whole roast data part of the plot disappeared. 
 5. Can we try putting the readings to the right of the plot? Reading width stays fixed, whatever fits the current width of the readings and then stretch the plot to fill the rest. 
+6. Default Drop bean temperature in auto mode is 220, not 230
 
 
 
