@@ -147,7 +147,22 @@ Legacy "steps" format (duration-based segments):
   ]
 }
 ```
+## Pi setup as Kiosk
+1. Install fullpageos onto a raspbery pi
+2. connect GPIo 3 (pin5) and GND (Pin6) to a momenty switch
+4. Plug in a keyboard
+5. Press CTRL+ALT+F1 to access terminal
+6. sudo nmcli device wifi hotspot ssid MyFullPageHotspot password MyPassword123
+6. sudo nmcli connection modify Hotspot connection.autoconnect yes
+6. sudo nmcli connection modify Hotspot connection.autoconnect-priority 100
 
+7. sudo nano /boot/firmware/config.txt
+8. at the bottom, add dtoverlay=gpio-shutdown
+9. Press Ctrl + O, then Enter to save the changes. Press Ctrl + X to exit the editor.
+
+
+
+## Web Profile Creation (maybe works?)
 You can also try the [Gaggiuino web profiler](https://matthew73210.github.io/Gaggiuino-web-profiler/) under the _pun_
 "Yägermeister Mode" to generate profiles.
 

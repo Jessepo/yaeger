@@ -1,11 +1,11 @@
 
 Smaller screen optimization
-1. 10080 pixels wide pi screen in kiosk mode. Readings fixed width, setpoint only 2 places after decimal. Should show on left with Controls and events on right. 30% or so width should be readings and the rest controls/events. 
-2. Top bar buttons should be half as wide, perhaps wrap text into two lines? Smaller text is ok, just 15% or so though. Move PID toggle to the PID container at the bottom, automatically enable PID when loading prfile. Add a "Clear Reset" button between cool down and all off. This would clear the screen, stop data collection, and be prepared to start following the profile once "start roast" is pressed. 
-3. The profile modification bar should always stay below the graph. at this smaller width is is below the readings/controls/events cell
-4. Loading a profile again should trigger a reset, roast data is cleared and machine is ready to follow the profile with "start roast"
-5. End roast button should trigger "drop" event and start cool down process. at 50 BT cool down should end and trigger popup to save roast .json to device along with image. Also set roast name if it hasn't been set. 
-6. There is no way to clear the screen or stop data collection/display after start roast has been pressed. 
+1. Clear reset button returns it to freshly booted state. Look at all states, variables, etc. Sometimes the event markers stay, etc. 
+2. Y axis on the plot should go to 400, not 300. Or maybe start at 300 and autoscale if it goes above
+3. Fan setpoints should be interpolated, not steps. Just like BT
+4. When I tried to mofify a roast as it was going, the whole roast data part of the plot disappeared. 
+5. Can we try putting the readings to the right of the plot? Reading width stays fixed, whatever fits the current width of the readings and then stretch the plot to fill the rest. 
+
 
 
 when disconnected and reconnected this was the  serial output. Is there anything I should worry about there?:
