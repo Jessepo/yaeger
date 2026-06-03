@@ -659,8 +659,16 @@ input[type="range"]:disabled {
    Main split: chart + side panel
    ============================================================================ */
 
-/* Stacked vertically for 1080x800 — chart, profile strip, then the
-   readings/controls panel below the strip. */
+/* Top row: chart fills the remaining width, readings/events column is
+   fixed-width on the right.  Aligned stretch so the chart's height
+   matches the sidebar's natural height. */
+.dashboard-top {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 8px;
+  align-items: stretch;
+}
+
 .chart-area {
   background: var(--bg-1);
   border: 1px solid var(--border);
@@ -669,17 +677,13 @@ input[type="range"]:disabled {
   box-shadow: var(--shadow-sm);
   display: flex;
   min-height: 300px;
+  min-width: 0;
 }
 
-.dashboard-panel {
-  display: grid;
-  grid-template-columns: 30% 1fr;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.dashboard-panel-left,
-.dashboard-panel-right {
+/* Reusable card wrapper for the side-readings column and the
+   full-width controls row.  Same look as the old .dashboard-panel-*
+   classes that were here before. */
+.dashboard-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -689,6 +693,17 @@ input[type="range"]:disabled {
   padding: 10px;
   box-shadow: var(--shadow-sm);
   min-width: 0;
+}
+
+/* Side column right of the chart: readings stacked above events, fixed
+   width inherited from .dashboard-top's grid column. */
+.side-readings {
+  /* No special rules — .dashboard-card handles the look, parent grid
+     handles the width. */
+}
+
+.controls-area {
+  /* Full-width card under the profile strip. */
 }
 
 #liveChart {
@@ -730,9 +745,10 @@ input[type="range"]:disabled {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   padding: 4px 8px;
-  /* Fixed width so digits changing (e.g., 99.0 -> 100.0) don't reflow
-     surrounding cells.  Tuned to fit "999.9°C" comfortably. */
-  min-width: 7rem;
+  /* Tabular-nums on the value (further down) keeps digits from wobbling.
+     Min-width here keeps the card itself from collapsing too tight,
+     tuned to fit the narrow sidebar (220 - 20 padding ≈ 200 / 2 ≈ 95). */
+  min-width: 5rem;
 }
 
 .reading-label {

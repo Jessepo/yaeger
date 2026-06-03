@@ -256,9 +256,21 @@ void Control::applyProfileAt(float elapsedSec) {
   }
   setSetpoint(setpointVal);
 
-  // Fan: step-style (take the previous point's value) + offset, when defined
-  if (prev->fan != 0xFF) {
-    int adjusted = (int)prev->fan + _fanOffset;
+  // Fan: linear interpolate between prev->fan and next->fan, matching the
+  // setpoint behaviour above.  Only kicks in when both endpoints define
+  // a fan value; if only one side has fan, hold that value step-style.
+  if (prev->fan != 0xFF || next->fan != 0xFF) {
+    float fanVal;
+    if (prev->fan != 0xFF && next->fan != 0xFF && next != prev) {
+      float span = next->timeSec - prev->timeSec;
+      float t = span > 0.f ? (elapsedSec - prev->timeSec) / span : 0.f;
+      fanVal = (float)prev->fan + ((float)next->fan - (float)prev->fan) * t;
+    } else if (prev->fan != 0xFF) {
+      fanVal = (float)prev->fan;
+    } else {
+      fanVal = (float)next->fan;
+    }
+    int adjusted = (int)(fanVal + 0.5f) + _fanOffset;
     if (adjusted < 0) adjusted = 0;
     if (adjusted > 100) adjusted = 100;
     setFan((float)adjusted);

@@ -219,7 +219,11 @@ export function initializeChart(el: HTMLElement): ChartInstance {
         type: "value",
         name: "°C",
         min: 0,
-        max: 300,
+        // 300 is the typical roast ceiling.  Autoscale upward in 50°
+        // steps when ET / setpoint ever climbs higher (e.g., aggressive
+        // ramp profiles) instead of clipping the line off.
+        max: (value: { max: number }) =>
+          value.max <= 300 ? 300 : Math.ceil(value.max / 50) * 50,
         position: "left",
         axisLabel: { color: COLORS.axis },
         nameTextStyle: { color: COLORS.axis },
@@ -237,8 +241,13 @@ export function initializeChart(el: HTMLElement): ChartInstance {
       },
     ],
     dataZoom: [{ type: "inside", xAxisIndex: 0 }],
+    // NOTE: every series has an explicit `id`.  setOption() merges series
+    // by id when present; without ids it merges BY INDEX, which means
+    // partial updates (e.g., updateProfileLines passing only 2 entries)
+    // clobber the wrong slots and the chart loses its other series.
     series: [
       {
+        id: "bt",
         name: "BT",
         type: "line",
         data: [],
@@ -256,6 +265,7 @@ export function initializeChart(el: HTMLElement): ChartInstance {
         yAxisIndex: 0,
       },
       {
+        id: "et",
         name: "ET",
         type: "line",
         data: [],
@@ -267,6 +277,7 @@ export function initializeChart(el: HTMLElement): ChartInstance {
         yAxisIndex: 0,
       },
       {
+        id: "btRor",
         name: "BT ROR",
         type: "line",
         data: [],
@@ -278,6 +289,7 @@ export function initializeChart(el: HTMLElement): ChartInstance {
         yAxisIndex: 1,
       },
       {
+        id: "setpoint",
         name: "Setpoint",
         type: "line",
         data: [],
@@ -287,6 +299,7 @@ export function initializeChart(el: HTMLElement): ChartInstance {
         yAxisIndex: 0,
       },
       {
+        id: "profileBt",
         name: "Profile BT",
         type: "line",
         data: [],
@@ -296,16 +309,17 @@ export function initializeChart(el: HTMLElement): ChartInstance {
         yAxisIndex: 0,
       },
       {
+        id: "profileFan",
         name: "Profile Fan",
         type: "line",
         data: [],
         showSymbol: false,
-        step: "end",
         lineStyle: { width: 1.5, color: COLORS.profileFan, type: "dashed", opacity: 0.7 },
         itemStyle: { color: COLORS.profileFan },
         yAxisIndex: 1,
       },
       {
+        id: "burner",
         name: "Burner",
         type: "line",
         data: [],
@@ -316,6 +330,7 @@ export function initializeChart(el: HTMLElement): ChartInstance {
         yAxisIndex: 1,
       },
       {
+        id: "btRaw",
         name: "BT raw",
         type: "line",
         data: [],
@@ -327,6 +342,7 @@ export function initializeChart(el: HTMLElement): ChartInstance {
         z: 1,
       },
       {
+        id: "etRaw",
         name: "ET raw",
         type: "line",
         data: [],
@@ -351,15 +367,23 @@ export function initializeChart(el: HTMLElement): ChartInstance {
 export function updateChart(chart: ChartInstance, roast: RoastState) {
   const { measurements, startDate, events } = roast;
   if (measurements.length === 0) {
+    // Clear every measurement-driven series AND wipe the event markers
+    // that hang on the BT series (otherwise Clear Reset leaves the dots
+    // and dashed lines on the chart from the previous roast).
     chart.setOption({
       series: [
-        { name: "BT", data: [] },
-        { name: "ET", data: [] },
-        { name: "BT ROR", data: [] },
-        { name: "Setpoint", data: [] },
-        { name: "Burner", data: [] },
-        { name: "BT raw", data: [] },
-        { name: "ET raw", data: [] },
+        {
+          id: "bt",
+          data: [],
+          markLine: { silent: true, symbol: "none", data: [] },
+          markPoint: { silent: true, data: [] },
+        },
+        { id: "et", data: [] },
+        { id: "btRor", data: [] },
+        { id: "setpoint", data: [] },
+        { id: "burner", data: [] },
+        { id: "btRaw", data: [] },
+        { id: "etRaw", data: [] },
       ],
     });
     return;
@@ -432,17 +456,17 @@ export function updateChart(chart: ChartInstance, roast: RoastState) {
   chart.setOption({
     series: [
       {
-        name: "BT",
+        id: "bt",
         data: btData,
         markLine: { silent: true, symbol: "none", data: markLineData },
         markPoint: { silent: true, data: markPointData },
       },
-      { name: "ET", data: etData },
-      { name: "BT ROR", data: rorData },
-      { name: "Setpoint", data: spData },
-      { name: "Burner", data: burnerData },
-      { name: "BT raw", data: btRawData },
-      { name: "ET raw", data: etRawData },
+      { id: "et", data: etData },
+      { id: "btRor", data: rorData },
+      { id: "setpoint", data: spData },
+      { id: "burner", data: burnerData },
+      { id: "btRaw", data: btRawData },
+      { id: "etRaw", data: etRawData },
     ],
   });
 }
@@ -497,8 +521,8 @@ export function updateProfileLines(
   if (!profile || profile.steps.length === 0) {
     chart.setOption({
       series: [
-        { name: "Profile BT", data: [] },
-        { name: "Profile Fan", data: [] },
+        { id: "profileBt", data: [] },
+        { id: "profileFan", data: [] },
       ],
     });
     return;
@@ -525,8 +549,8 @@ export function updateProfileLines(
 
   chart.setOption({
     series: [
-      { name: "Profile BT", data: btPoints },
-      { name: "Profile Fan", data: fanPoints },
+      { id: "profileBt", data: btPoints },
+      { id: "profileFan", data: fanPoints },
     ],
   });
 }
