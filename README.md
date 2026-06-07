@@ -8,8 +8,12 @@
 
 ## The gist
 
-Yaeger is an embedded computer that takes control of your "coffee roaster" via Artisan-Scope.
-It currently supports reading data from two temperature probes as well as controlling a fan and pulsing a heater. This is a heavily modified version of the original Yaeger project. 
+Yaeger is an embedded computer that takes control of your "coffee roaster". It reads from up to two
+thermocouples, drives a fan via PWM (or a digital SSR), and modulates a heating element through an
+AC SSR. The firmware ships with its own touchscreen-friendly web dashboard served straight off the
+device, and also speaks the Artisan-Scope WebSocket protocol for users who prefer that workflow.
+
+This is a heavily modified fork of the original Yaeger project.
 
 ### Primary goal
 
@@ -51,6 +55,17 @@ This repo also includes a sample config for Artisan-Scope.
 #### Artisan Scope
 
 Load the config, found in `./artisan-settings.aset` into Artisan-Scope, change the server ip to match yours and click the on button.
+
+> **Don't mix flows.** The firmware can either be driven by Artisan (Artisan sends `setBurner` /
+> `setFan` directly to the heater + fan) or by the dashboard's profile execution (Start Roast →
+> firmware autonomously interpolates the setpoint and runs PID). If you click **Start Roast** in
+> the dashboard, the firmware re-writes the setpoint every ~100 ms from the loaded profile, and
+> Artisan's burner commands will get overwritten. Pick one:
+>
+> * **Artisan-driven**: leave PID **off** in the dashboard's PID Settings panel and don't press
+>   Start Roast. The dashboard becomes a live viewer; Artisan has full control.
+> * **Dashboard-driven**: load a profile, press Start Roast. Artisan can still read temps but
+>   can't move the burner.
 
 #### Web interface
 
@@ -101,8 +116,24 @@ You'll still need to find your own PID values for your hardware — kp/ki/kd are
 A full-width strip under the chart lets you click any profile point to select it, then nudge time / temperature / fan
 with ±30 s, ±1 °C, ±5 % buttons. Edits push to firmware in real time so they take effect mid-roast within ~100 ms.
 
-Eight profile slots can be saved to the device's LittleFS partition for later. Roasts are downloadable as JSON or as a
-PNG snapshot of the chart with one button press.
+Eight profile slots can be saved to the device's LittleFS partition for later. Five roast slots too — saves are
+1 Hz downsampled so a 15-minute roast lands at ~150-300 KB on flash, while the local "Download JSON" button still
+gives you the full 10 Hz capture. There's also a one-click "Download PNG" for a chart snapshot.
+
+### End-of-roast workflow
+
+* **Start Roast** auto-records the **Charge** event so the chart's `charge` marker lands at t=0.
+* **End Roast** records a **Drop** event, asks the firmware to stop following, and enters cool-down (Manual mode,
+  heater 0, fan to the configured Cooldown Fan %).
+* **Auto-drop**: while in PID mode following a profile, the third Controls slider becomes a **Target BT** slider
+  (default 230 °C). When the live BT crosses that value, the same drop-→-cool-down path fires automatically.
+* **Save modal**: once BT drops below 50 °C the dashboard opens a modal with a roast-name input and one button that
+  saves JSON to device + downloads JSON locally + downloads a PNG of the chart. Then All Off.
+* **Clear Reset** in the top bar wipes the chart, event markers, modal state, and asks firmware to end any
+  in-progress roast — back to a fresh state.
+* Each event (charge / dry-end / 1st & 2nd crack / drop) drops a colored dot on the BT line in the chart, labeled
+  with the BT at that moment. Buttons in the Events panel are color-coded along the bean-roast progression too
+  (green raw → tan → cinnamon → browns → near-black drop).
 
 ### Reliability & safety
 
@@ -148,17 +179,21 @@ Legacy "steps" format (duration-based segments):
 }
 ```
 ## Pi setup as Kiosk
-1. Install fullpageos onto a raspbery pi
-2. connect GPIo 3 (pin5) and GND (Pin6) to a momenty switch
-4. Plug in a keyboard
-5. Press CTRL+ALT+F1 to access terminal
-6. sudo nmcli device wifi hotspot ssid MyFullPageHotspot password MyPassword123
-6. sudo nmcli connection modify Hotspot connection.autoconnect yes
-6. sudo nmcli connection modify Hotspot connection.autoconnect-priority 100
 
-7. sudo nano /boot/firmware/config.txt
-8. at the bottom, add dtoverlay=gpio-shutdown
-9. Press Ctrl + O, then Enter to save the changes. Press Ctrl + X to exit the editor.
+1. Install FullPageOS onto a Raspberry Pi.
+2. Connect GPIO 3 (pin 5) and GND (pin 6) to a momentary switch — gives you a hardware shutdown
+   button after step 8.
+3. Plug in a keyboard.
+4. Press `Ctrl+Alt+F1` to access the terminal.
+5. Bring up a WiFi hotspot so the ESP32 has a network to join, and make it auto-start on boot:
+   ```sh
+   sudo nmcli device wifi hotspot ssid MyFullPageHotspot password MyPassword123
+   sudo nmcli connection modify Hotspot connection.autoconnect yes
+   sudo nmcli connection modify Hotspot connection.autoconnect-priority 100
+   ```
+6. Edit the boot config: `sudo nano /boot/firmware/config.txt`.
+7. At the bottom, add `dtoverlay=gpio-shutdown`.
+8. Press `Ctrl+O`, then `Enter` to save. Press `Ctrl+X` to exit nano.
 
 
 

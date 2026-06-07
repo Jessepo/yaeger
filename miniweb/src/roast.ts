@@ -1114,8 +1114,18 @@ function resetRoast() {
     currentState: { ...state.val.currentState, status: RoasterStatus.idle },
     roast: undefined,
   };
+  // Reset every per-roast transient state so the next Start Roast begins
+  // from a freshly-booted feel — no lingering markers, modals, or flags.
   cooling.val = false;
-  // Empty chart (the if-empty branch in updateChart clears all series).
+  autoDropFired = false;
+  coolDownTriggered = false;
+  showSaveModal.val = false;
+  modalNameInput.val = "";
+  modalStatus.val = "";
+  // Empty chart — updateChart's measurements-empty branch wipes BT/ET/ROR/
+  // Setpoint/Burner data AND the BT series' markLine+markPoint (where the
+  // event markers live), so charge/dry/crack/drop annotations don't carry
+  // over to the next roast.  Profile lines stay (configuration, not state).
   updateChart(chart, {
     startDate: new Date(),
     measurements: [],
@@ -1260,17 +1270,12 @@ const createApp = () => div(
     ),
   ),
 
-  // --- Chart (full width) ----------------------------------------------
-  div({ class: "chart-area" }, chartElement),
-
-  // --- Profile point editor (full-width row under the chart) -----------
-  div({ class: "profile-strip" }, ProfileEditor),
-
-  // --- Bottom dashboard panel: readings (30%) | controls + events (70%) -
+  // --- Top row: chart fills the rest + readings/events fixed-width column
   div(
-    { class: "dashboard-panel" },
+    { class: "dashboard-top" },
+    div({ class: "chart-area" }, chartElement),
     div(
-      { class: "dashboard-panel-left" },
+      { class: "dashboard-card side-readings" },
       div(
         { class: "panel-section" },
         div({ class: "panel-title" }, "Readings"),
@@ -1339,8 +1344,14 @@ const createApp = () => div(
         ),
       ),
     ),
-    div(
-      { class: "dashboard-panel-right" },
+  ),
+
+  // --- Profile point editor (full-width row under the chart row) -------
+  div({ class: "profile-strip" }, ProfileEditor),
+
+  // --- Controls row (full width) ---------------------------------------
+  div(
+    { class: "dashboard-card controls-area" },
       div(
         { class: "panel-section" },
         div({ class: "panel-title" }, "Controls"),
@@ -1467,7 +1478,6 @@ const createApp = () => div(
         ),
       ),
     ),
-  ),
 
   // --- Collapsible settings ---------------------------------------------
   div(
