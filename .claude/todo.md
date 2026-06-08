@@ -1,11 +1,12 @@
 
 Smaller screen optimization
-1. Clear reset button returns it to freshly booted state. Look at all states, variables, etc. Sometimes the event markers stay, etc. 
-2. Y axis on the plot should go to 400, not 300. Or maybe start at 300 and autoscale if it goes above
-3. Fan setpoints should be interpolated, not steps. Just like BT
-4. When I tried to mofify a roast as it was going, the whole roast data part of the plot disappeared. 
-5. Can we try putting the readings to the right of the plot? Reading width stays fixed, whatever fits the current width of the readings and then stretch the plot to fill the rest. 
+
 6. Default Drop bean temperature in auto mode is 220, not 230
+7. Put fan and heater sliders side by side. Heater on left, fan on right. 
+8. When in manual mode you cannot turn the heater on unless you turn the fan on first. And do not automatically turn the fan on, do nothing when the heater is touched without the fan on. 
+9. Remove the "Controls" header, it's isn't needed and takes up vertical space. 
+10. Adjusting the profile on the fly during a roast still doesn't work. The heater deactivates completely now. 
+
 
 
 
