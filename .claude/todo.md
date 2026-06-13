@@ -3,7 +3,7 @@ Smaller screen optimization
 
 6. Default Drop bean temperature in auto mode is 220, not 230
 7. Put fan and heater sliders side by side. Heater on left, fan on right. 
-8. When in manual mode you cannot turn the heater on unless you turn the fan on first. And do not automatically turn the fan on, do nothing when the heater is touched without the fan on. 
+8. When in manual mode you cannot turn the heater on unless you turn the fan on first. And do not automatically turn the fan on, do nothing when the heater is touched without the fan on. In fact, don't allow the heater to come on in manual mode unless you pressed "start roast" in manual mode. Like arming the system.  
 9. Remove the "Controls" header, it's isn't needed and takes up vertical space. 
 10. Adjusting the profile on the fly during a roast still doesn't work. The heater deactivates completely now. 
 
