@@ -62,8 +62,8 @@ const cooling = van.state(false); // true between End Roast click and BT<50°C
 const showSaveModal = van.state(false);
 // Target BT for auto-drop while following a profile.  Once BT crosses this
 // value, the same code path as End Roast is fired (drop event + cool-down
-// + save modal at 50°C).  Default 230°C ≈ Vienna roast finish.
-const targetBT = van.state(230);
+// + save modal at 50°C).  Default 220°C ≈ Full City roast finish.
+const targetBT = van.state(220);
 const wifiSSID = van.state("");
 const wifiPass = van.state("");
 const wifiMessage = van.state("");
@@ -1153,6 +1153,17 @@ function fmtTemp(v: number | null | undefined): string {
   return `${v.toFixed(1)}°`;
 }
 
+// In Manual mode the heater is disarmed unless (a) Start Roast has been
+// pressed (status === roasting) AND (b) the fan is on.  Mirrors a
+// belt-and-suspenders check on the firmware side so a stale command can
+// never dry-fire the element.
+function canRunHeater(): boolean {
+  return (
+    state.val.currentState.status === RoasterStatus.roasting &&
+    slider1Value.val > 0
+  );
+}
+
 const ReadingCard = (labelText: string, value: () => string, unit?: string) =>
   div(
     { class: "reading-card" },
@@ -1354,75 +1365,85 @@ const createApp = () => div(
     { class: "dashboard-card controls-area" },
       div(
         { class: "panel-section" },
-        div({ class: "panel-title" }, "Controls"),
-        Slider({
-          label: "Heater Power",
-          unit: "%",
-          state: slider2Value,
-          min: 0,
-          max: 100,
-          step: 5,
-          disabled: () => currentMode.val === "PID",
-          onChange: (v) => {
-            slider2Value.val = v;
-            updateHeaterPower(v);
-          },
-        }),
-        () => {
-          // SSR fan: simple on/off toggle, no offset
-          if (fanMode.val === "ssr") {
-            return div(
-              { class: "control" },
-              div(
-                { class: "control-header" },
-                span({ class: "control-label" }, "Fan"),
-                span(
-                  { class: "control-value" },
-                  () => (slider1Value.val > 0 ? "ON" : "OFF"),
+        // Heater + Fan side by side.  Heater is also disabled in Manual
+        // mode until a roast has been Started AND the fan is on — see
+        // canRunHeater() — to prevent dry-heating the element.
+        div(
+          { class: "controls-row" },
+          Slider({
+            label: "Heater Power",
+            unit: "%",
+            state: slider2Value,
+            min: 0,
+            max: 100,
+            step: 5,
+            disabled: () =>
+              currentMode.val === "PID" || !canRunHeater(),
+            onChange: (v) => {
+              slider2Value.val = v;
+              updateHeaterPower(v);
+            },
+          }),
+          () => {
+            // SSR fan: simple on/off toggle, no offset
+            if (fanMode.val === "ssr") {
+              return div(
+                { class: "control" },
+                div(
+                  { class: "control-header" },
+                  span({ class: "control-label" }, "Fan"),
+                  span(
+                    { class: "control-value" },
+                    () => (slider1Value.val > 0 ? "ON" : "OFF"),
+                  ),
                 ),
-              ),
-              button({
-                class: () =>
-                  `toggle ${slider1Value.val > 0 ? "active" : ""}`,
-                onclick: () => {
-                  const next = slider1Value.val > 0 ? 0 : 100;
-                  slider1Value.val = next;
-                  updateFanPower(next);
-                },
-              }),
-            );
-          }
-          // PWM fan: existing behaviour
-          const followingFan =
-            followProfileEnabled.val &&
-            profile.val != null &&
-            profile.val.steps.some((s) => s.fanValue != null);
-          return followingFan
-            ? Slider({
-                label: "Fan offset (vs profile)",
-                unit: "%",
-                state: fanOffset,
-                min: -25,
-                max: 25,
-                step: 5,
-                onChange: (v) => {
-                  fanOffset.val = v;
-                  sendCommand({ id: 1, command: "setFanOffset", value: v });
-                },
-              })
-            : Slider({
-                label: "Fan Power",
-                unit: "%",
-                state: slider1Value,
-                min: 0,
-                max: 100,
-                step: 5,
-                onChange: (v) => {
-                  slider1Value.val = v;
-                  updateFanPower(v);
-                },
-              });
-        },
+                button({
+                  class: () =>
+                    `toggle ${slider1Value.val > 0 ? "active" : ""}`,
+                  onclick: () => {
+                    const next = slider1Value.val > 0 ? 0 : 100;
+                    slider1Value.val = next;
+                    updateFanPower(next);
+                  },
+                }),
+              );
+            }
+            // PWM fan: existing behaviour
+            const followingFan =
+              followProfileEnabled.val &&
+              profile.val != null &&
+              profile.val.steps.some((s) => s.fanValue != null);
+            return followingFan
+              ? Slider({
+                  label: "Fan offset (vs profile)",
+                  unit: "%",
+                  state: fanOffset,
+                  min: -25,
+                  max: 25,
+                  step: 5,
+                  onChange: (v) => {
+                    fanOffset.val = v;
+                    sendCommand({
+                      id: 1,
+                      command: "setFanOffset",
+                      value: v,
+                    });
+                  },
+                })
+              : Slider({
+                  label: "Fan Power",
+                  unit: "%",
+                  state: slider1Value,
+                  min: 0,
+                  max: 100,
+                  step: 5,
+                  onChange: (v) => {
+                    slider1Value.val = v;
+                    updateFanPower(v);
+                  },
+                });
+          },
+        ),
         // When following a profile under PID, the setpoint is driven by
         // firmware-side interpolation — the user can't usefully adjust it
         // here.  Repurpose the slider as "Target BT" so they can set the

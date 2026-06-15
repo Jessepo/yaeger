@@ -706,6 +706,15 @@ input[type="range"]:disabled {
   /* Full-width card under the profile strip. */
 }
 
+/* Heater | Fan side-by-side at the top of the controls card.  Setpoint
+ * (or Target BT) and the BT/ET toggle sit full-width below this row. */
+.controls-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
 #liveChart {
   flex: 1;
   min-height: 0;

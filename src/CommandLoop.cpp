@@ -244,12 +244,13 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         d["fanOffset"] = control->getFanOffset();
         d["historyCount"] = control->getHistoryCount();
         JsonArray pts = d["profile"].to<JsonArray>();
-        for (int i = 0; i < control->getActiveProfileCount(); i++) {
-          const ProfilePoint &p = control->getActiveProfilePoint(i);
+        ProfilePoint snap[MAX_PROFILE_POINTS];
+        int snapN = control->snapshotActiveProfile(snap);
+        for (int i = 0; i < snapN; i++) {
           JsonObject o = pts.add<JsonObject>();
-          o["time"] = p.timeSec;
-          o["setpoint"] = p.setpoint;
-          if (p.fan != 0xFF) o["fan"] = (int)p.fan;
+          o["time"] = snap[i].timeSec;
+          o["setpoint"] = snap[i].setpoint;
+          if (snap[i].fan != 0xFF) o["fan"] = (int)snap[i].fan;
         }
         String out;
         serializeJson(resp, out);

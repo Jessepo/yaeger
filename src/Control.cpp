@@ -201,8 +201,14 @@ void Control::loop() {
   _autotune.update(temp);
 
   float heaterValue = _autotune.getOutput();
-  if (heaterValue > 0. && getFan() <= 10) {
-    setFan(30.f);
+
+  // Safety: in Manual mode, refuse to heat unless the fan is moving.
+  // Belt-and-suspenders with the web UI's disabled-slider check —
+  // protects the heating element from dry-firing if a stale command
+  // ever sneaks past the web guard or arrives over a different channel.
+  if (_autotune.getOperationalMode() == OperationalMode::Manual &&
+      getFan() < 1.f) {
+    heaterValue = 0.f;
   }
 
   _heater.setValue(heaterValue);
@@ -221,25 +227,36 @@ float Control::getRoastElapsedSec() const {
 
 // Linear-interpolate setpoint and fan from the active profile at the given
 // elapsed time, then push them into the PID and fan driver.
+//
+// CRITICAL: the WS callback (AsyncTCP task) calls setActiveProfile which
+// rewrites _profilePoints + _profilePointCount. We take a snapshot under
+// the mutex first so we never interpolate from half-updated points.
 void Control::applyProfileAt(float elapsedSec) {
-  if (_profilePointCount == 0) return;
+  ProfilePoint snap[MAX_PROFILE_POINTS];
+  int snapCount;
+  portENTER_CRITICAL(&_profileMux);
+  snapCount = _profilePointCount;
+  for (int i = 0; i < snapCount; i++) snap[i] = _profilePoints[i];
+  portEXIT_CRITICAL(&_profileMux);
 
-  // Find the segment containing elapsedSec.
-  // Profile points are sorted in time-ascending order by construction.
-  const ProfilePoint *prev = &_profilePoints[0];
-  const ProfilePoint *next = &_profilePoints[0];
+  if (snapCount == 0) return;
 
-  if (elapsedSec <= _profilePoints[0].timeSec) {
+  // Find the segment containing elapsedSec.  Points are sorted in
+  // time-ascending order by construction.
+  const ProfilePoint *prev = &snap[0];
+  const ProfilePoint *next = &snap[0];
+
+  if (elapsedSec <= snap[0].timeSec) {
     // Before the first point: hold first point's values.
-    next = prev = &_profilePoints[0];
-  } else if (elapsedSec >= _profilePoints[_profilePointCount - 1].timeSec) {
+    next = prev = &snap[0];
+  } else if (elapsedSec >= snap[snapCount - 1].timeSec) {
     // Past the last point: hold last values.
-    next = prev = &_profilePoints[_profilePointCount - 1];
+    next = prev = &snap[snapCount - 1];
   } else {
-    for (int i = 1; i < _profilePointCount; i++) {
-      if (elapsedSec <= _profilePoints[i].timeSec) {
-        prev = &_profilePoints[i - 1];
-        next = &_profilePoints[i];
+    for (int i = 1; i < snapCount; i++) {
+      if (elapsedSec <= snap[i].timeSec) {
+        prev = &snap[i - 1];
+        next = &snap[i];
         break;
       }
     }
@@ -308,10 +325,21 @@ void Control::clearHistory() {
 void Control::setActiveProfile(const ProfilePoint *points, int count) {
   if (count > MAX_PROFILE_POINTS) count = MAX_PROFILE_POINTS;
   if (count < 0) count = 0;
+  portENTER_CRITICAL(&_profileMux);
   for (int i = 0; i < count; i++) {
     _profilePoints[i] = points[i];
   }
   _profilePointCount = count;
+  portEXIT_CRITICAL(&_profileMux);
+}
+
+int Control::snapshotActiveProfile(ProfilePoint *outPoints) {
+  int n;
+  portENTER_CRITICAL(&_profileMux);
+  n = _profilePointCount;
+  for (int i = 0; i < n; i++) outPoints[i] = _profilePoints[i];
+  portEXIT_CRITICAL(&_profileMux);
+  return n;
 }
 
 void Control::startRoast() {

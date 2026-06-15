@@ -2,6 +2,8 @@
 #define CONTROL_H
 
 #include <cstdint>
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
 #include "vendor/AutoTunePID.h"
 #include "pwm.h"
 #include "sensor.h"
@@ -72,9 +74,15 @@ private:
   bool tuningEnabled;
   bool hasResults;
 
-  // Active profile (in RAM only — uploaded by webapp on Start Roast)
+  // Active profile (in RAM only — uploaded by webapp on Start Roast).
+  // _profileMux guards _profilePoints[] and _profilePointCount: the WS
+  // callback runs on AsyncTCP's FreeRTOS task while Control::loop runs on
+  // the main Arduino task, so without a mutex the main loop could read a
+  // half-updated profile during a live-edit and compute a garbage
+  // setpoint (which would drop heater output to 0).
   ProfilePoint _profilePoints[MAX_PROFILE_POINTS];
   int _profilePointCount = 0;
+  portMUX_TYPE _profileMux = portMUX_INITIALIZER_UNLOCKED;
   bool _following = false;
   unsigned long _roastStartMs = 0;
   int _fanOffset = 0; // ±25, applied to profile fan command
@@ -134,8 +142,11 @@ public:
 
   // Active profile execution (firmware drives PID setpoint + fan from this)
   void setActiveProfile(const ProfilePoint *points, int count);
-  int getActiveProfileCount() const { return _profilePointCount; }
-  const ProfilePoint &getActiveProfilePoint(int i) const { return _profilePoints[i]; }
+  // Atomically copy the current active profile into `outPoints` (must have
+  // room for MAX_PROFILE_POINTS).  Returns the count copied.  Use this
+  // from any thread other than the main loop (e.g. WS request handlers)
+  // to avoid racing with setActiveProfile.
+  int snapshotActiveProfile(ProfilePoint *outPoints);
   void startRoast();
   void endRoast();
   void allOff();
