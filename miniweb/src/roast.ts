@@ -173,24 +173,22 @@ van.derive(() => {
         }));
         profile.val = profileFromPoints(points);
       }
-      if (m.following) {
-        if (state.val.currentState.status !== RoasterStatus.roasting) {
-          const startMs = timestamp.getTime() - Math.round(m.roastElapsedSec * 1000);
-          state.val = {
-            ...state.val,
-            currentState: { ...state.val.currentState, status: RoasterStatus.roasting },
-            roast: {
-              startDate: new Date(startMs),
-              measurements: [],
-              events: [],
-              commands: [],
-            },
-            profile: profile.val,
-          };
-        }
-        // Pull the 1Hz backfill to sync/fill gaps.
+      if (m.following && state.val.currentState.status !== RoasterStatus.roasting) {
+        const startMs = timestamp.getTime() - Math.round(m.roastElapsedSec * 1000);
+        state.val = {
+          ...state.val,
+          currentState: { ...state.val.currentState, status: RoasterStatus.roasting },
+          roast: {
+            startDate: new Date(startMs),
+            measurements: [],
+            events: [],
+            commands: [],
+          },
+          profile: profile.val,
+        };
+        // Pull the 1Hz backfill.
         sendCommand({ id: 1, command: "getRoastHistory" });
-      } else if (!m.following && state.val.currentState.status === RoasterStatus.roasting && !cooling.val) {
+      } else if (!m.following && state.val.currentState.status === RoasterStatus.roasting) {
         // Firmware ended the roast while we were away.
         state.val = {
           ...state.val,
@@ -357,8 +355,9 @@ function appendEvent(label: string) {
   const roast = state.val.roast;
   if (!roast) return;
 
-  const lastMessage = state.val.currentState.lastMessage || { BT: 0, ET: 0, Amb: 0, FanVal: 0, BurnerVal: 0, id: 0 };
-  const lastUpdate = state.val.currentState.lastUpdate || new Date();
+  const lastMessage = state.val.currentState.lastMessage;
+  const lastUpdate = state.val.currentState.lastUpdate;
+  if (!lastMessage || !lastUpdate) return;
 
   state.val = {
     ...state.val,
@@ -643,11 +642,9 @@ const UploadButton = () => {
 
 const RoastTime = () => {
   const start = state.val.roast?.startDate ?? new Date();
-  const measurements = state.val.roast?.measurements || [];
-  if (measurements.length === 0) {
-    return "00:00";
-  }
-  const last = measurements[measurements.length - 1].timestamp;
+  const last =
+    state.val.roast!.measurements[state.val.roast!.measurements.length - 1]
+      .timestamp;
   return getFormattedTimeDifference(start, last);
 };
 
@@ -1163,7 +1160,6 @@ function fmtTemp(v: number | null | undefined): string {
 function canRunHeater(): boolean {
   return (
     state.val.currentState.status === RoasterStatus.roasting &&
-    !cooling.val &&
     slider1Value.val > 0
   );
 }
@@ -1296,7 +1292,7 @@ const createApp = () => div(
         div({ class: "panel-title" }, "Readings"),
         div(
           { class: "readings-grid" },
-          ReadingCard("Air", () => fmtTemp(currentMessage.val?.ET), "C"),
+          ReadingCard("Inlet Air", () => fmtTemp(currentMessage.val?.ET), "C"),
           ReadingCard("Bean", () => fmtTemp(currentMessage.val?.BT), "C"),
           ReadingCard(
             "ROR",
