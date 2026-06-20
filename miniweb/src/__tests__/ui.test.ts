@@ -126,12 +126,13 @@ describe('UI Button Click Integration Tests', () => {
     expect(endBtn.disabled).toBe(true);
   });
 
-  it('triggers Start Roast workflow on start button click', () => {
+  it('triggers Start Roast workflow on start button click', async () => {
     const startBtn = appElement.querySelector('.btn-start') as HTMLButtonElement;
     const endBtn = appElement.querySelector('.btn-end') as HTMLButtonElement;
 
     // Click "Start Roast"
     startBtn.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     // Verify websocket commands were sent
     expect(mockSendCommand).toHaveBeenCalledWith(
@@ -146,16 +147,18 @@ describe('UI Button Click Integration Tests', () => {
     expect(endBtn.disabled).toBe(false);
   });
 
-  it('triggers End Roast (drop/cooling) workflow on end button click', () => {
+  it('triggers End Roast (drop/cooling) workflow on end button click', async () => {
     const startBtn = appElement.querySelector('.btn-start') as HTMLButtonElement;
     const endBtn = appElement.querySelector('.btn-end') as HTMLButtonElement;
 
     // 1. Start the roast first
     startBtn.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
     mockSendCommand.mockClear();
 
     // 2. Click "End Roast"
     endBtn.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     // Verify it triggers endRoast and switches to manual cooling
     expect(mockSendCommand).toHaveBeenCalledWith(
@@ -183,16 +186,18 @@ describe('UI Button Click Integration Tests', () => {
     );
   });
 
-  it('triggers Clear Reset workflow on reset button click', () => {
+  it('triggers Clear Reset workflow on reset button click', async () => {
     const startBtn = appElement.querySelector('.btn-start') as HTMLButtonElement;
     const resetBtn = appElement.querySelector('.btn-reset') as HTMLButtonElement;
 
     // Start roast first
     startBtn.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
     mockSendCommand.mockClear();
 
     // Click "Clear Reset"
     resetBtn.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     // It should end the roast on firmware
     expect(mockSendCommand).toHaveBeenCalledWith(

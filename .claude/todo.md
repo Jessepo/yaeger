@@ -2,6 +2,9 @@
 Smaller screen optimization
 
 11. The slider for Fan and Heater are slightly out of alignment - the fan is slightly lower
+12. The roast failed.. Connected to the local hotspot yaeger.local (flaky for some reason, my computer issues likely) It appears to have frozen and the PID continued for maintain temperature. OLED temperatures worked, possibly also on the web interface but the PID following broke. 
+13. The heater readout gets super weird, bounces around.. Something after I started a roast, stopped it, and cleared all. I don't think it was actually on (the fan was off) but the readout slider was moving around. Scary
+
 
 
 
