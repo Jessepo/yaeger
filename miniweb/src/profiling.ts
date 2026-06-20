@@ -22,19 +22,16 @@ export function followProfile(
   const elapsedTime = (new Date().getTime() - roast.startDate.getTime()) / 1000; // Elapsed time in seconds
   let accumulatedTime = 0;
 
-  for (const step of profile.steps) {
+  for (let idx = 0; idx < profile.steps.length; idx++) {
+    const step = profile.steps[idx];
     accumulatedTime += step.duration;
     if (elapsedTime <= accumulatedTime) {
       // We're in this step
       const stepStartTime = accumulatedTime - step.duration;
-      const progress = (elapsedTime - stepStartTime) / step.duration;
+      const progress = step.duration > 0 ? (elapsedTime - stepStartTime) / step.duration : 1;
 
       // Interpolate setpoint
-      const prevSetpoint =
-        stepStartTime === 0
-          ? profile.steps[0].setpoint
-          : profile.steps.find((s, i) => profile.steps[i + 1] === step)
-            ?.setpoint || step.setpoint;
+      const prevSetpoint = idx === 0 ? step.setpoint : profile.steps[idx - 1].setpoint;
       const nextSetpoint = step.setpoint;
 
       return {
@@ -252,7 +249,10 @@ export function profileFromPoints(points: ProfilePoint[]): Profile {
     },
   ];
   for (let i = 1; i < sorted.length; i++) {
-    const duration = sorted[i].time - sorted[i - 1].time;
+    let duration = sorted[i].time - sorted[i - 1].time;
+    if (i === 1) {
+      duration = Math.max(0.01, duration - 0.01);
+    }
     if (duration <= 0) continue; // skip duplicate / out-of-order timestamps
     steps.push({
       interpolation: "linear",
@@ -580,7 +580,10 @@ function phasedToProfile(p: any): Profile {
     fanValue: fanAtTime(fan, heater[0].time),
   });
   for (let i = 1; i < heater.length; i++) {
-    const duration = heater[i].time - heater[i - 1].time;
+    let duration = heater[i].time - heater[i - 1].time;
+    if (i === 1) {
+      duration = Math.max(0.01, duration - 0.01);
+    }
     if (duration <= 0) continue;
     steps.push({
       interpolation: "linear" as const,
