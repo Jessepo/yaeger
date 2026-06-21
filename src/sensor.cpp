@@ -1,4 +1,4 @@
-#include "Sensor.h"
+#include "sensor.h"
 #include "logging.h"
 
 Sensor::Sensor(int tClk, int tCs, int tDo, String sensorName)

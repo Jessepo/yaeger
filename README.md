@@ -15,34 +15,6 @@ device, and also speaks the Artisan-Scope WebSocket protocol for users who prefe
 
 This is a heavily modified fork of the original Yaeger project.
 
-### Primary goal
-
-Is to use an old popcorn popper you have gathering dust in your basement and modifying it into a sample roaster for
-roasting small batches of coffee at a time.
-
-### Suported hardware
-
-* [ESP32-S3 (devkit-1)](https://www.aliexpress.com/item/1005006266375800.html) or an [S3-mini](https://www.aliexpress.com/item/1005006177646698.html)
-* 1 or 2 [MAX31855](https://www.aliexpress.com/item/1005006381598473.html) thermocouple chips
-* 1 [DC pwm capable dimmer](https://www.aliexpress.com/item/1005006457613501.html) for the fan (must support 3.3v control)
-* 1 DC controlled [AC SSR](https://www.aliexpress.com/item/4000045425145.html) for controling the heating element (same as above)
-
-### Other required hardware for the build
-
-* 18V DC PSU for driving the fan (be careful how you wire this)
-* regular wire K-type thermocouple probe (the one that comes with your multimeter)
-* flexible K-type thermocouple probe, 1x50/1.5x50 (sometimes difficult to source, they come and go on aliexpress, search for
-flexible thermocouple 1x100 - this usually works).
-
-### NOTE
-
-We don't have enough data if there is enough difference between ET and BT to justify two thermocouples. You might use
-just one.
-
-#### Optional upgrades
-
-* 24V DC PSU for more fan power
-
 ### Command and control
 
 
@@ -73,25 +45,9 @@ Yaeger ships with a built-in single-page dashboard served from the device. Point
 your home wifi, or `192.168.4.1` if Yaeger created its own access point. No app to install — the firmware serves the UI
 from LittleFS.
 
-The dashboard shows live temp/ROR/burner/fan plotted with ECharts, a profile editor in the strip beneath the chart, and
-collapsible settings panels (PID, WiFi, Profile, Saved Roasts) at the bottom. Designed for a 10" 1080×800 touchscreen
-mounted on the roaster, but works in any modern browser.
-
-![yaeger webui](./assets/yaeger-webui.png)
-
 #### Using Yaeger on the go
 
 If Yaeger can't connect to your preferred Wifi, it will create its own access point. Perfect for when out and about :grin:
-
-## Build guide (WIP)
-
-### Schema
-
-![schema](./schema/Schematic_Yaeger_2024-12-24.svg)
-
-Kicad projects for the S3 and S3 mini versions of the PCB, can be found in the PCB folder, along with a BOM for the pcb.
-
-Courtesy of [@dlisec](https://github.com/dlisec)
 
 ### Building and flashing
 

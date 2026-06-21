@@ -5,7 +5,7 @@
 
 #define SAMPLES 256
 #define SAMPLING_FREQUENCY 16000
-#define CRACK_THRESHOLD 1000
+#define CRACK_THRESHOLD 600000
 #define LOCRACKF 6000
 #define HICRACKF 8000
 
@@ -26,9 +26,13 @@ int delaytime = 3000;
 
 void setup() {
   Serial.begin(115200);
-  Serial2.begin(115200, SERIAL_8N1, 16, 17);
+  delay(100);
+  Serial.println("[DBG] Serial started");
+  
+  // Serial2.begin(115200, SERIAL_8N1, 16, 17);
 
   pixel.begin();
+  Serial.println("[DBG] Pixel started");
 
   i2s_config_t i2s_config = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
@@ -48,7 +52,9 @@ void setup() {
     .data_in_num = I2S_SD
   };
   i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
+  Serial.println("[DBG] I2S driver installed");
   i2s_set_pin(I2S_NUM_0, &pin_config);
+  Serial.println("[DBG] I2S pins set");
 
   Serial.println("[DBG] Ready");
 }
@@ -76,7 +82,7 @@ void loop() {
       else if (!isthis2ndcount && newscan) { recordmillis2 = millis(); isthis2ndcount = 1; counttime++; newscan = 0; }
       else if (!isthis3rdcount && newscan) { recordmillis3 = millis(); isthis3rdcount = 1; counttime++; newscan = 0; }
 
-      pixel.setPixelColor(0, pixel.Color(0, 255, 0)); pixel.show();
+      pixel.setPixelColor(0, pixel.Color(0, 180, 0)); pixel.show();
     }
   }
 
@@ -85,9 +91,9 @@ void loop() {
 
   if (isthis1stcount && isthis3rdcount) {
     if ((recordmillis3 - recordmillis1) <= (unsigned long)delaytime && counttime <= 3) {
-      Serial2.printf("CRACK,%d,%lu\n", counttime, recordmillis3 - recordmillis1);
+      // Serial2.printf("CRACK,%d,%lu\n", counttime, recordmillis3 - recordmillis1);
       Serial.printf("[DBG] CRACK sent: count=%d elapsed=%lums\n", counttime, recordmillis3 - recordmillis1);
-      pixel.setPixelColor(0, pixel.Color(255, 0, 0)); pixel.show(); delay(500);
+      pixel.setPixelColor(0, pixel.Color(150, 0, 0)); pixel.show(); delay(500);
       pixel.setPixelColor(0, pixel.Color(0, 0, 0)); pixel.show();
       counttime = 0;
     }
