@@ -16,6 +16,8 @@
 #include "Control.h"
 #include "preferenceKeys.h"
 
+#include "leds.h"
+
 #define PIN 48
 Adafruit_NeoPixel pixels(1, PIN);
 Control *control;
@@ -79,6 +81,8 @@ void setup() {
   if (!LittleFS.begin(true)) {
     Serial.println("LittleFS failed");
   }
+  if (!LittleFS.exists("/roasts")) LittleFS.mkdir("/roasts");
+  if (!LittleFS.exists("/profiles")) LittleFS.mkdir("/profiles");
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
   server.serveStatic("/settings", LittleFS, "/").setDefaultFile("index.html");
   server.serveStatic("/editor", LittleFS, "/").setDefaultFile("index.html");
@@ -96,14 +100,18 @@ void setup() {
     preferences.getFloat(pidPKey,1),
     preferences.getFloat(pidIKey,0.1),
     preferences.getFloat(pidDKey,0.01),
-    StringToTarget(preferences.getString(temperatureTargetKey,"ET"))
+    StringToTarget(preferences.getString(temperatureTargetKey,"ET")),
+    preferences.getString(fanModeKey, "pwm") == "ssr"
   );
 
   // WebSocket handler
   wsHandler = new WSRequestHandler(&ws, control, &preferences);
 
   server.addHandler(&ws);
-
+  
+  initLeds();
+  initAnimation();
+  
   // API
   setupApi(&server, &preferences);
 
@@ -120,6 +128,8 @@ void loop() {
   delay(10);
   control->loop();
   wsHandler->loop();
+  updateDisplay(control);
+  updateLeds(control);
   if (control->hasAutotuneResults()) {
     preferences.putFloat(pidPKey, control->getKp());
     preferences.putFloat(pidIKey, control->getKi());

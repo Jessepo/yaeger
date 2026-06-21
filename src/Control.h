@@ -1,6 +1,9 @@
 #ifndef CONTROL_H
 #define CONTROL_H
 
+#include <cstdint>
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
 #include "vendor/AutoTunePID.h"
 #include "pwm.h"
 #include "sensor.h"
@@ -12,6 +15,31 @@ enum class TemperatureTarget {
   ET,
   MAX
 };
+
+// One profile control point in absolute time from roast start.
+// 0xFF in `fan` means "no fan command at this point" (sentinel).
+struct ProfilePoint {
+  float timeSec;
+  float setpoint;
+  uint8_t fan;
+};
+
+static const int MAX_PROFILE_POINTS = 32;
+
+// One row of the roast history. Stored at 1 Hz for the duration of the roast.
+// Compact (16 B) so a 30-min buffer is ~56 KB.
+struct RoastSample {
+  uint16_t elapsedSec; // seconds since roast start (~18h max)
+  uint16_t setpoint;   // °C, no fractional precision needed for history
+  int16_t et;          // °C × 10
+  int16_t bt;          // °C × 10
+  uint8_t fan;         // 0-100
+  uint8_t burner;      // 0-100
+  uint8_t flags;       // reserved
+  uint8_t _pad;
+};
+
+static const int HISTORY_CAPACITY = 1800; // 30 min @ 1 Hz
 
 inline const char* TargetToString(TemperatureTarget t)
 {
@@ -34,7 +62,10 @@ class Control {
 private:
   AutoTunePID _autotune;
   TemperatureTarget _temperatureTarget;
-  PwmOutput _fan;
+  PwmOutput *_pwmFan;   // owned; null when in SSR fan mode
+  int _fanPin;
+  bool _fanSsrMode;
+  bool _ssrFanOn;
   PwmOutput _heater;
   Sensor _etSensor;
   Sensor _btSensor;
@@ -43,12 +74,36 @@ private:
   bool tuningEnabled;
   bool hasResults;
 
+  // Active profile (in RAM only — uploaded by webapp on Start Roast).
+  // _profileMux guards _profilePoints[] and _profilePointCount: the WS
+  // callback runs on AsyncTCP's FreeRTOS task while Control::loop runs on
+  // the main Arduino task, so without a mutex the main loop could read a
+  // half-updated profile during a live-edit and compute a garbage
+  // setpoint (which would drop heater output to 0).
+  ProfilePoint _profilePoints[MAX_PROFILE_POINTS];
+  int _profilePointCount = 0;
+  portMUX_TYPE _profileMux = portMUX_INITIALIZER_UNLOCKED;
+  bool _following = false;
+  unsigned long _roastStartMs = 0;
+  int _fanOffset = 0; // ±25, applied to profile fan command
+
+  // 1 Hz history buffer (circular)
+  RoastSample _history[HISTORY_CAPACITY];
+  int _historyHead = 0;   // index of oldest entry if full
+  int _historyCount = 0;
+  unsigned long _lastHistorySampleMs = 0;
+
+  // For safety watchdog
+  unsigned long _lastWsActivityMs = 0;
+
   // Private helper methods
   float getTemperature() const;
+  void applyProfileAt(float elapsedSec);
+  void recordHistorySample();
 
 public:
-  Control(float kp, float ki, float kd, TemperatureTarget target);
-  ~Control() = default;
+  Control(float kp, float ki, float kd, TemperatureTarget target, bool fanSsrMode);
+  ~Control();
 
   // PID gain configuration
   void setPidValues(float kp, float ki, float kd);
@@ -84,6 +139,33 @@ public:
   void startAutotune();
   void resetAutotune();
   bool hasAutotuneResults() const;
+
+  // Active profile execution (firmware drives PID setpoint + fan from this)
+  void setActiveProfile(const ProfilePoint *points, int count);
+  // Atomically copy the current active profile into `outPoints` (must have
+  // room for MAX_PROFILE_POINTS).  Returns the count copied.  Use this
+  // from any thread other than the main loop (e.g. WS request handlers)
+  // to avoid racing with setActiveProfile.
+  int snapshotActiveProfile(ProfilePoint *outPoints);
+  void startRoast();
+  void endRoast();
+  void allOff();
+  bool isFollowing() const { return _following; }
+  unsigned long getRoastStartMs() const { return _roastStartMs; }
+  float getRoastElapsedSec() const;
+  void setFanOffset(int offset);
+  int getFanOffset() const { return _fanOffset; }
+
+  // History buffer
+  int getHistoryCount() const { return _historyCount; }
+  // Returns sample by chronological index (0 = oldest).
+  const RoastSample &getHistorySample(int chronologicalIdx) const;
+  void clearHistory();
+
+  // Watchdog: webapp pings this on every incoming WebSocket activity.
+  // Used by the safety check to detect prolonged disconnect.
+  void noteWsActivity();
+  unsigned long getMsSinceWsActivity() const;
 
   // Main control loop
   void loop();

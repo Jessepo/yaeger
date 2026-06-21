@@ -8,10 +8,10 @@ set -e
 #   ./build_and_flash.sh <s3 | s3-mini>
 #
 # Example:
-#   ./build_and_flash.sh s3      # For ESP32-S3
-#   ./build_and_flash.sh s3-mini # For ESP32-S3 Mini
+#   ./build_and_flash.sh s3       # ESP32-S3
+#   ./build_and_flash.sh s3-mini  # ESP32-S3 Mini
 #
-# If you cloned the project from GitHub, ensure all folders have the correct permissions:
+# If cloned from GitHub, ensure correct permissions:
 #   chmod -R u+rwX .
 # The LittleFS filesystem might fail if permissions are incorrect.
 
@@ -23,11 +23,17 @@ fi
 
 PIO_ENV="esp32-$1"
 
+# Add PlatformIO to PATH
+#export PATH=$PATH:"$USERPROFILE/.platformio/penv/Scripts"
+PIO="$USERPROFILE/.platformio/penv/Scripts/pio.exe"
 # Validate the provided environment
+
 if [[ "$PIO_ENV" != "esp32-s3" && "$PIO_ENV" != "esp32-s3-mini" ]]; then
     echo "Invalid argument: '$1'. Use 's3' or 's3-mini'."
     exit 1
 fi
+
+export PATH="$PATH:$USERPROFILE/.platformio/penv/Scripts"
 
 echo "Using PlatformIO environment: $PIO_ENV"
 
@@ -74,4 +80,4 @@ pio run -e "$PIO_ENV" -t buildfs -t uploadfs || { echo "LittleFS upload failed!"
 echo "Building and uploading the firmware..."
 pio run -e "$PIO_ENV" -t upload || { echo "Firmware build or upload failed!"; exit 1; }
 
-echo "All tasks completed successfully!"
+echo "Done!"

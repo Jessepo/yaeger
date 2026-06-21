@@ -17,6 +17,7 @@
 #define DISPLAY_CL 42
 
 #else
+#define ARGB_PIN 4
 
 #define FAN_PIN 8
 
@@ -42,7 +43,7 @@
 
 
 // DEVICE PARAMETERS
-#define MAX_HEATER_POWER 90
+#define MAX_HEATER_POWER 65
 #define FAN_FREQUENCY 20000
 #define HEATER_FREQUENCY 50
 #define INITIAL_WIFI_SSID ""

@@ -1,230 +1,1138 @@
+/* ============================================================================
+   Design tokens
+   ============================================================================ */
+
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    "Helvetica Neue", sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  color-scheme: dark;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* Palette: 38424e / 50575f / 974c53 / fe5848 / fe8443 */
+  --bg-0: #2a323c;
+  --bg-1: #38424e;
+  --bg-2: #424d5a;
+  --bg-3: #50575f;
+  --text-0: #f5f1ec;
+  --text-1: #d8d3cc;
+  --text-2: #a8a39c;
+  --text-3: #7d7770;
+  --border: rgba(245, 241, 236, 0.08);
+  --accent: #fe8443;
+  --accent-dim: rgba(254, 132, 67, 0.18);
+  --success: #fe8443;
+  --warning: #974c53;
+  --danger: #fe5848;
+  --info: #974c53;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  /* === ShadCN design tokens === */
-  --radius: 0.5rem;
-
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
-
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 240 5.9% 10%;
-
-  --primary: 240 5.9% 10%;
-  --primary-foreground: 0 0% 98%;
-
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
+  --r-sm: 4px;
+  --r-md: 7px;
+  --r-lg: 10px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+* {
+  box-sizing: border-box;
 }
-a:hover {
-  color: #535bf2;
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
 }
 
 body {
-  margin: 0;
-  /*display: flex;*/
-  place-items: center;
-  min-width: 320px;
+  background:
+    radial-gradient(ellipse at 100% 0%, rgba(254, 132, 67, 0.06), transparent 50%),
+    radial-gradient(ellipse at 0% 100%, rgba(151, 76, 83, 0.08), transparent 50%),
+    var(--bg-0);
+  background-attachment: fixed;
+  color: var(--text-0);
   min-height: 100vh;
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-control_cluster {
-	place-content: align;
-	background-color: #ff0000;
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-0);
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+p {
+  margin: 0;
 }
 
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  /*padding: 5rem;*/
-  text-align: center;
-}
+/* ============================================================================
+   Buttons (defaults)
+   ============================================================================ */
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vanilla:hover {
-  filter: drop-shadow(0 0 2em #3178c6aa);
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
-
-/* ------------------- ShadCN-style Button ------------------- */
 button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-
-  height: 2.5rem;
-  padding: 0 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
   font-family: inherit;
-
-  border-radius: var(--radius);
-  border: 1px solid hsl(var(--border));
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text-0);
+  border-radius: var(--r-md);
   cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease,
+    transform 100ms ease;
+}
 
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+button:hover:not(:disabled) {
+  background: var(--bg-3);
+  border-color: var(--accent);
 }
-button:hover {
-  background: hsl(var(--primary) / 0.9);
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
 }
+
 button:disabled {
-  opacity: 0.5;
-  pointer-events: none;
+  opacity: 0.4;
+  cursor: not-allowed;
 }
-button:focus-visible {
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-  box-shadow: 0 0 0 2px hsl(var(--ring));
-}
-/* ------------------- ShadCN-style Inputs ------------------- */
-input:not([type="range"]) {
-  height: 2.5rem;
-  width: 100%;
-  padding: 0 0.75rem;
-  font-size: 0.875rem;
 
-  border-radius: var(--radius);
-  border: 1px solid hsl(var(--input));
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+/* ============================================================================
+   Form inputs
+   ============================================================================ */
 
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-input:not([type="range"]):focus {
+.form-input,
+input[type="text"],
+input[type="password"],
+input[type="number"] {
+  font-family: inherit;
+  font-size: 0.8125rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-1);
+  color: var(--text-0);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   outline: none;
-  border-color: hsl(var(--ring));
-  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.4);
+  transition: border-color 150ms ease;
 }
-/* ------------------- Card & Section ------------------- */
-.card,
-.section {
-  padding: 1.5rem;
-  margin-top: 1.5rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  background: hsl(var(--secondary));
-  color: hsl(var(--secondary-foreground));
+
+.form-input:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus {
+  border-color: var(--accent);
 }
-.section h2 {
-  margin-top: 0;
-  margin-bottom: 1rem;
+
+/* Range slider */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--fill, 0%),
+    var(--bg-3) var(--fill, 0%),
+    var(--bg-3) 100%
+  );
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 0 0 3px var(--accent-dim);
+  transition: transform 100ms ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+input[type="range"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Dashboard shell
+   ============================================================================ */
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+/* ============================================================================
+   Topbar
+   ============================================================================ */
+
+.topbar {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topbar-logo {
+  font-size: 1.125rem;
+}
+
+.topbar-title {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+
+.conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 6px currentColor;
+}
+
+.topbar-clock {
+  justify-self: end;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 1.125rem;
   font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.04em;
 }
-/* ------------------- Dark-mode token overrides ------------------- */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
 
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83%;
+/* Roast title (between connection status and clock).
+   Inline input that looks like plain text by default, with hover/focus
+   styling so you know it's editable. Commits on blur or Enter. */
+.topbar-roast-title {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
+.title-input-inline {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-0);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--r-sm);
+  outline: none;
+  min-width: 8rem;
+  max-width: 24rem;
+  text-align: right;
+  transition: background 150ms ease, border-color 150ms ease;
+}
 
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
+.title-input-inline::placeholder {
+  color: var(--text-3);
+  font-style: italic;
+}
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 85.7% 97.3%;
+.title-input-inline:hover:not(:focus) {
+  background: var(--bg-2);
+  border-color: var(--border);
+  cursor: text;
+}
+
+.title-input-inline:focus {
+  background: var(--bg-2);
+  border-color: var(--accent);
+}
+
+.title-ts {
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding-left: 2px;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-action {
+  padding: 0.25rem 0.375rem;
+  font-weight: 600;
+  font-size: 0.725rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  /* Narrow buttons that force multi-word labels to stack on two lines.
+     The button labels contain explicit "\n" between words; pre-line
+     preserves the newline as a line break. */
+  width: 4rem;
+  white-space: pre-line;
+  line-height: 1.15;
+  text-align: center;
+  /* Stop the inline-flex default from forcing the text onto one line. */
+  display: inline-block;
+}
+
+/* iOS-style toggle component. Used for PID On/Off and Fan Control. */
+.toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+}
+
+.toggle-row-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-1);
+}
+
+.toggle-state-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-2);
+  min-width: 2.5em;
+}
+
+.toggle {
+  appearance: none;
+  position: relative;
+  width: 50px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+  transition: background 200ms ease, border-color 200ms ease;
+  flex: 0 0 auto;
+}
+
+.toggle::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: var(--text-1);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 200ms ease, background 200ms ease;
+}
+
+.toggle.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle.active::before {
+  transform: translateX(24px);
+  background: var(--bg-0);
+}
+
+.toggle:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reboot-notice {
+  font-size: 0.6875rem;
+  color: var(--warning);
+  font-style: italic;
+}
+
+/* Hardware/firmware row inside the PID Settings panel */
+.fan-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Profile point editor — full-width strip under the chart.
+   Layout: scrollable column of points on the left, fixed adjustment
+   panel on the right. Each column shows time / temp / fan stacked. */
+.profile-strip {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.profile-editor-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8125rem;
+  color: var(--text-3);
+  font-style: italic;
+  padding: 4px 6px;
+}
+
+.profile-editor-empty-add {
+  font-size: 0.75rem;
+}
+
+.profile-editor-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.profile-cols-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.profile-row-labels {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  padding-right: 2px;
+  flex: 0 0 auto;
+}
+
+.prow-label {
+  height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.profile-cols {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  flex: 1 1 0;
+  min-width: 0;
+  padding-bottom: 2px;
+}
+
+.profile-col {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 56px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+
+.profile-col:hover {
+  background: var(--bg-3);
+}
+
+.profile-col.selected {
+  background: rgba(254, 132, 67, 0.18);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.pcol-cell {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-0);
+  border-bottom: 1px solid var(--border);
+}
+
+.pcol-cell:last-child {
+  border-bottom: none;
+}
+
+.pcol-time {
+  color: var(--accent);
+}
+
+.pcol-fan {
+  color: var(--text-2);
+}
+
+/* Adjustment panel on the right — two side-by-side 3-row grids:
+   left = (label, -, +) per row;  right = stacked widgets (Point, Add, Delete) */
+.profile-adjust {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  padding: 0 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  flex: 0 0 auto;
+  min-width: 240px;
+}
+
+.padj-grid {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr 1fr;
+  grid-auto-rows: 32px;
+  gap: 0 4px;
+  align-items: center;
+}
+
+.padj-side {
+  display: grid;
+  grid-template-rows: repeat(3, 32px);
+  gap: 0;
+  align-items: stretch;
+}
+
+.padj-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+
+.padj-btn {
+  padding: 0.25rem 0.25rem;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.padj-meta {
+  font-size: 0.6875rem;
+  color: var(--text-3);
+  text-align: center;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.padj-idx {
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.padj-add {
+  font-size: 0.6875rem;
+}
+
+.padj-delete {
+  font-size: 0.6875rem;
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.padj-delete:hover:not(:disabled) {
+  background: var(--danger);
+  color: var(--bg-0);
+}
+
+.btn-start {
+  background: var(--success);
+  color: var(--bg-0);
+  border-color: var(--success);
+}
+.btn-start:hover:not(:disabled) {
+  background: #e5743a;
+  border-color: #e5743a;
+}
+
+.btn-end {
+  background: #6e4a2e;
+  color: var(--text-0);
+  border-color: #8b6240;
+}
+.btn-end:hover:not(:disabled) {
+  background: #8b6240;
+  border-color: #a47854;
+}
+
+.btn-cool {
+  background: #5b8caf;
+  color: var(--text-0);
+  border-color: #6a9bbe;
+}
+.btn-cool:hover:not(:disabled) {
+  background: #6a9bbe;
+  border-color: #82adcb;
+}
+
+/* Clear Reset — between Cool Down and All Off.  Neutral slate so it
+   doesn't compete with the alarming red of All Off. */
+.btn-reset {
+  background: var(--bg-3);
+  color: var(--text-0);
+  border-color: var(--text-3);
+}
+.btn-reset:hover:not(:disabled) {
+  background: var(--text-3);
+  color: var(--bg-0);
+}
+
+.btn-alloff {
+  background: #fe5848;
+  color: var(--bg-0);
+  border-color: #ff7062;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(254, 88, 72, 0.45),
+    0 2px 8px rgba(254, 88, 72, 0.3);
+}
+.btn-alloff:hover:not(:disabled) {
+  background: #ff6f60;
+  border-color: #ff8a7c;
+  box-shadow: 0 0 0 1px rgba(254, 88, 72, 0.6),
+    0 2px 12px rgba(254, 88, 72, 0.45);
+}
+
+.btn-mode.active {
+  background: var(--accent);
+  color: var(--bg-0);
+  border-color: var(--accent);
+}
+
+/* ============================================================================
+   Main split: chart + side panel
+   ============================================================================ */
+
+/* Top row: chart fills the remaining width, readings/events column is
+   fixed-width on the right.  Aligned stretch so the chart's height
+   matches the sidebar's natural height. */
+.dashboard-top {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.chart-area {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 8px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  min-height: 300px;
+  min-width: 0;
+}
+
+/* Reusable card wrapper for the side-readings column and the
+   full-width controls row.  Same look as the old .dashboard-panel-*
+   classes that were here before. */
+.dashboard-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 10px;
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+/* Side column right of the chart: readings stacked above events, fixed
+   width inherited from .dashboard-top's grid column. */
+.side-readings {
+  /* No special rules — .dashboard-card handles the look, parent grid
+     handles the width. */
+}
+
+.controls-area {
+  /* Full-width card under the profile strip. */
+}
+
+/* Heater | Fan side-by-side at the top of the controls card.  Setpoint
+ * (or Target BT) and the BT/ET toggle sit full-width below this row. */
+.controls-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
+#liveChart {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* ============================================================================
+   Side / dashboard panel
+   ============================================================================ */
+
+.panel-section + .panel-section {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.panel-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+
+/* ============================================================================
+   Reading cards
+   ============================================================================ */
+
+.readings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.reading-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 4px 8px;
+  /* Tabular-nums on the value (further down) keeps digits from wobbling.
+     Min-width here keeps the card itself from collapsing too tight,
+     tuned to fit the narrow sidebar (220 - 20 padding ≈ 200 / 2 ≈ 95). */
+  min-width: 5rem;
+}
+
+.reading-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  margin-bottom: 1px;
+}
+
+.reading-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.28rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.1;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  /* Tabular nums keep each digit's column the same width so the value
+     doesn't shift as the number changes from "9.5" to "10.0". */
+  font-variant-numeric: tabular-nums;
+}
+
+.reading-unit {
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+}
+
+/* ============================================================================
+   Sliders
+   ============================================================================ */
+
+.control {
+  margin-bottom: 8px;
+}
+
+.control:last-child {
+  margin-bottom: 0;
+}
+
+.control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 3px;
+}
+
+.control-label {
+  font-size: 0.85rem;
+  color: var(--text-1);
+}
+
+.control-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ============================================================================
+   Target toggle
+   ============================================================================ */
+
+.target-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.target-label {
+  font-size: 0.75rem;
+  color: var(--text-1);
+  margin-right: 2px;
+}
+
+.target-btn {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.target-btn.active {
+  background: var(--accent);
+  color: var(--bg-0);
+  border-color: var(--accent);
+}
+
+/* ============================================================================
+   Event grid
+   ============================================================================ */
+
+.event-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.event-btn {
+  padding: 0.375rem 0.375rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-0);
+  border-width: 1px;
+  border-style: solid;
+}
+
+/* Subtle bean-color progression: raw green -> yellowing -> browns ->
+   dark roast -> drop.  Backgrounds are intentionally muted so the
+   panel doesn't shout. */
+.event-charge      { background: #5b7c4d; border-color: #6f9460; }
+.event-dry         { background: #8a7d4f; border-color: #a09262; }
+.event-crack1      { background: #8b6e4f; border-color: #a18260; }
+.event-crack1-end  { background: #6e553c; border-color: #836b4f; }
+.event-crack2      { background: #5a3f2a; border-color: #735540; }
+.event-drop        { background: #3d2a1c; border-color: #5a3f2d; }
+
+.event-btn:hover:not(:disabled) {
+  filter: brightness(1.18);
+}
+
+/* ============================================================================
+   Settings row (collapsibles)
+   ============================================================================ */
+
+.settings-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.settings-panel {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 0;
+  box-shadow: var(--shadow-sm);
+  align-self: start;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.settings-panel input,
+.settings-panel select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* PID form */
+.pid-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: end;
+}
+
+.pid-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pid-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.pid-input {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: right;
+}
+
+.pid-apply {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
+.settings-summary {
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-1);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 150ms ease;
+}
+
+.settings-summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--text-3);
+  transition: transform 150ms ease;
+}
+
+.settings-panel[open] .settings-summary {
+  border-bottom-color: var(--border);
+}
+
+.settings-panel[open] .settings-summary::before {
+  transform: rotate(90deg);
+}
+
+.settings-panel > *:not(.settings-summary) {
+  padding: 10px 12px;
+}
+
+/* ============================================================================
+   WiFi form
+   ============================================================================ */
+
+.wifi-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 6px;
+}
+
+.wifi-form > input {
+  width: 100%;
+}
+
+/* ============================================================================
+   Status message
+   ============================================================================ */
+
+.status-message {
+  margin: 6px 12px 10px;
+  padding: 6px 10px;
+  border-radius: var(--r-md);
+  font-size: 0.75rem;
+}
+
+.status-message.success {
+  background: rgba(254, 132, 67, 0.15);
+  color: #ffb185;
+  border: 1px solid rgba(254, 132, 67, 0.3);
+}
+
+.status-message.error {
+  background: rgba(254, 88, 72, 0.15);
+  color: #ffa399;
+  border: 1px solid rgba(254, 88, 72, 0.3);
+}
+
+/* ============================================================================
+   Roast IO (download/save/upload buttons)
+   ============================================================================ */
+
+.roast-io {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0;
+}
+
+.roast-io > * {
+  flex: 1;
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 720px) {
+  .dashboard-panel {
+    grid-template-columns: 1fr;
   }
 }
 
-/* Style the slider */
-input[type="range"] {
-  -webkit-appearance: none;
-  width: 220px;
-  height: 6px;
-  /*background: #ddd;*/
-  border-radius: 3px;
-  position: relative;
-  margin: 20px 0;
+/* ============================================================================
+   Save-roast modal (post-cool-down)
+   ============================================================================ */
+
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
 }
 
-/* Remove default outline on focus */
-input[type="range"]:focus {
-  outline: none;
+.modal {
+  background: var(--bg-1);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  min-width: 360px;
+  max-width: 90vw;
+  box-shadow: var(--shadow-lg);
 }
 
-/* Track styles */
-input[type="range"]::-webkit-slider-runnable-track {
-  height: 6px;
-  background: #ddd;
-  border-radius: 3px;
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  color: var(--text-0);
 }
 
-/* Thumb styles */
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  height: 20px;
-  width: 20px;
-  border-radius: 50%;
-  background: #007BFF;
-  border: 2px solid #fff;
-  cursor: pointer;
-  margin-top: -7px; /* Center thumb */
+.modal-row {
+  margin-bottom: 12px;
 }
 
-/* Disabled slider styles */
-input[type="range"]:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.modal-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--text-2);
 }
 
-input[type="range"]:disabled::-webkit-slider-runnable-track {
-  background: #bbb; /* Lighter track for disabled state */
+.modal-input {
+  font-size: 0.9375rem;
+  padding: 0.5rem 0.75rem;
+  width: 100%;
 }
 
-input[type="range"]:disabled::-webkit-slider-thumb {
-  background: #888; /* Gray thumb for disabled state */
-  border: 2px solid #ccc;
-  cursor: not-allowed;
+.modal-status {
+  margin-top: 8px;
+  font-size: 0.8125rem;
+  color: var(--text-1);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modal-actions button {
+  flex: 1;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+}
+
+.modal-save-btn {
+  background: var(--success) !important;
+  color: var(--bg-0) !important;
+  border-color: var(--success) !important;
+}
+
+.modal-save-btn:hover:not(:disabled) {
+  background: #e5743a !important;
+  border-color: #e5743a !important;
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    grid-template-columns: 1fr;
+  }
+  .topbar-actions {
+    flex-wrap: wrap;
+  }
+  .topbar-clock {
+    justify-self: start;
+  }
 }
