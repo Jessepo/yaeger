@@ -77,7 +77,7 @@ button {
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 500;
-  padding: 0.375rem 0.75rem;
+  padding: 0.375rem 0.5rem;
   border: 1px solid var(--border);
   background: var(--bg-2);
   color: var(--text-0);
@@ -132,7 +132,7 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 4px;
+  height: 2px;
   border-radius: 999px;
   outline: none;
   cursor: pointer;
@@ -183,7 +183,7 @@ input[type="range"]:disabled {
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   padding: 8px;
 }
 
@@ -321,7 +321,7 @@ input[type="range"]:disabled {
 .toggle-row {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   height: 32px;
 }
 
@@ -397,7 +397,7 @@ input[type="range"]:disabled {
 .fan-mode-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   margin-bottom: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
@@ -410,7 +410,7 @@ input[type="range"]:disabled {
   background: var(--bg-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: 8px;
+  padding: 6px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -421,7 +421,7 @@ input[type="range"]:disabled {
   font-size: 0.8125rem;
   color: var(--text-3);
   font-style: italic;
-  padding: 4px 6px;
+  padding: 4px 4px;
 }
 
 .profile-editor-empty-add {
@@ -431,7 +431,7 @@ input[type="range"]:disabled {
 .profile-editor-row {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 12px;
+  gap: 6px;
   align-items: stretch;
   min-width: 0;
 }
@@ -456,7 +456,7 @@ input[type="range"]:disabled {
 }
 
 .prow-label {
-  height: 32px;
+  height: 30px;
   display: flex;
   align-items: center;
 }
@@ -474,7 +474,7 @@ input[type="range"]:disabled {
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
-  min-width: 56px;
+  min-width: 48px;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -493,7 +493,7 @@ input[type="range"]:disabled {
 }
 
 .pcol-cell {
-  height: 32px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -521,7 +521,7 @@ input[type="range"]:disabled {
 .profile-adjust {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 8px;
+  gap: 4px;
   padding: 0 6px;
   background: var(--bg-2);
   border: 1px solid var(--border);
@@ -665,7 +665,7 @@ input[type="range"]:disabled {
 .dashboard-top {
   display: grid;
   grid-template-columns: 1fr 110px;
-  gap: 8px;
+  gap: 4px;
   align-items: stretch;
 }
 
@@ -673,7 +673,7 @@ input[type="range"]:disabled {
   background: var(--bg-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: 8px;
+  padding: 4px;
   box-shadow: var(--shadow-sm);
   display: flex;
   min-height: 300px;
@@ -686,25 +686,16 @@ input[type="range"]:disabled {
 .dashboard-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   background: var(--bg-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: 10px;
+  padding: 5px;
   box-shadow: var(--shadow-sm);
   min-width: 0;
 }
 
-/* Side column right of the chart: readings stacked above events, fixed
-   width inherited from .dashboard-top's grid column. */
-.side-readings {
-  /* No special rules — .dashboard-card handles the look, parent grid
-     handles the width. */
-}
-
-.controls-area {
-  /* Full-width card under the profile strip. */
-}
+/* Side column right of the chart: readings stacked above events. */
 
 /* Roast-name row: thin full-width card between controls and events.
  * Hosts the RoastTitle (name input + timestamp) on the left and the
@@ -715,7 +706,7 @@ input[type="range"]:disabled {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
   padding: 4px 8px;
 }
 .roast-name-row .topbar-roast-title {
@@ -737,7 +728,7 @@ input[type="range"]:disabled {
 .controls-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
   align-items: start;
 }
 
@@ -752,7 +743,7 @@ input[type="range"]:disabled {
    ============================================================================ */
 
 .panel-section + .panel-section {
-  padding-top: 8px;
+  padding-top: 4px;
   border-top: 1px solid var(--border);
 }
 
@@ -821,7 +812,7 @@ input[type="range"]:disabled {
    ============================================================================ */
 
 .control {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .control:last-child {
@@ -855,7 +846,7 @@ input[type="range"]:disabled {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .target-label {
@@ -916,7 +907,7 @@ input[type="range"]:disabled {
 .settings-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 8px;
+  gap: 4px;
 }
 
 .settings-panel {
@@ -940,7 +931,7 @@ input[type="range"]:disabled {
 .pid-form {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 8px;
+  gap: 4px;
   align-items: end;
 }
 
@@ -1064,9 +1055,15 @@ input[type="range"]:disabled {
    Responsive
    ============================================================================ */
 
-@media (max-width: 720px) {
+@media (max-width: 590px) {
   .dashboard-panel {
     grid-template-columns: 1fr;
+  }
+  .controls-row {
+    grid-template-columns: 1fr;
+  }
+  .roast-name-row {
+    align-items: flex-start;
   }
 }
 
@@ -1130,7 +1127,7 @@ input[type="range"]:disabled {
 
 .modal-actions {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   margin-top: 16px;
 }
 
@@ -1151,7 +1148,7 @@ input[type="range"]:disabled {
   border-color: #e5743a !important;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 590px) {
   .topbar {
     grid-template-columns: 1fr;
   }

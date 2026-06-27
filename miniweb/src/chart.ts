@@ -187,7 +187,7 @@ export function initializeChart(el: HTMLElement): ChartInstance {
         "Burner",
       ],
     },
-    grid: { left: 52, right: 56, top: 40, bottom: 50 },
+    grid: { left: 40, right: 40, top: 50, bottom: 30 },
     tooltip: {
       trigger: "axis",
       backgroundColor: "rgba(42, 50, 60, 0.95)",

@@ -1236,7 +1236,7 @@ const createApp = () => div(
         class: "conn-dot",
         style: () =>
           `background:${
-            connectionStatus.val === "Connected"
+            connectionStatus.val === "OK"
               ? "var(--success)"
               : connectionStatus.val === "Error"
               ? "var(--danger)"
