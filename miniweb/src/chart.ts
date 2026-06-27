@@ -483,6 +483,12 @@ export function updateChart(chart: ChartInstance, roast: RoastState) {
   });
 }
 
+// Reset any user pan/zoom on the time axis back to the full data range.
+// Used by Clear Reset so the next roast starts from a fresh view.
+export function resetChartZoom(chart: ChartInstance) {
+  chart.dispatchAction({ type: "dataZoom", start: 0, end: 100 });
+}
+
 // Programmatically show the chart's hover crosshair + tooltip at a given
 // time. Used by the profile point editor to "preview" what's at the
 // selected point's time. Anchors the tooltip to the BT series when BT has

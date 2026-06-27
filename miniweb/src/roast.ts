@@ -1,6 +1,6 @@
 import "./style.css";
 import van from "vanjs-core";
-import { initializeChart, updateChart, updateProfileLines, highlightTime } from "./chart";
+import { initializeChart, updateChart, updateProfileLines, highlightTime, resetChartZoom } from "./chart";
 import {
   YaegerState,
   Measurement,
@@ -260,6 +260,7 @@ van.derive(() => {
 
     if (
       state.val.roast != null &&
+      !cooling.val &&
       (state.val.currentState.status == RoasterStatus.roasting || state.val.roast.measurements.length > 0)
     ) {
       console.log("Processing roast state update");
@@ -1132,6 +1133,9 @@ function resetRoast() {
     events: [],
     commands: [],
   });
+  // Wipe any pan/zoom the user did on the previous roast so the fresh
+  // chart starts at the full default view.
+  resetChartZoom(chart);
 }
 
 function setTarget(t: "BT" | "ET") {
@@ -1621,8 +1625,10 @@ function toggleRoastStart() {
 
 // Drop sequence: record event, ask firmware to stop following, then enter
 // cool-down (Manual, heater 0, fan to cooldownFanSpeed).  We stay in
-// roasting status while cooling so the chart keeps updating; the BT<50
-// watcher and save modal handle the transition back to idle.
+// roasting status while cooling, but cooling.val gates the measurement-
+// append in the WS handler so the chart + roast timer freeze at the
+// drop moment.  The BT<50 watcher and save modal handle the transition
+// back to idle.
 //
 // Called from: End Roast button (toggleRoastStart) and the auto-drop
 // derive that watches BT reaching targetBT during a profile-followed roast.
