@@ -1228,7 +1228,7 @@ const createApp = () => div(
     div(
       { class: "topbar-brand" },
       span({ class: "topbar-logo" }, "☕"),
-      h1({ class: "topbar-title" }, "Yaeger"),
+      
     ),
     div(
       { class: "topbar-status" },
@@ -1236,7 +1236,7 @@ const createApp = () => div(
         class: "conn-dot",
         style: () =>
           `background:${
-            connectionStatus.val === "OK"
+            connectionStatus.val === "Connected"
               ? "var(--success)"
               : connectionStatus.val === "Error"
               ? "var(--danger)"

@@ -38,17 +38,6 @@ export PATH="$PATH:$USERPROFILE/.platformio/penv/Scripts"
 echo "Using PlatformIO environment: $PIO_ENV"
 
 
-read -p "Choose frontend (r for reyaeger, empty for classic): " frontend
-
-if [ $frontend = 'r' ]; then
-
-echo "reyaeger download";
-curl -L https://github.com/RobTS/reyaeger/releases/latest/download/reyaeger.zip > reyaeger.zip
-rm -rf data
-mkdir data
-unzip -d ./data ./reyaeger.zip
-
-else
 
 # Step 1: Navigate to the miniweb directory
 echo "Navigating to miniweb..."
