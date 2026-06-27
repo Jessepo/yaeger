@@ -174,6 +174,18 @@ export function initializeChart(el: HTMLElement): ChartInstance {
       icon: "roundRect",
       itemWidth: 14,
       itemHeight: 8,
+      // Explicit list so the raw BT/ET traces stay drawn but don't
+      // chew legend width — they're already visually distinguishable
+      // as faint background lines behind the smoothed BT/ET.
+      data: [
+        "BT",
+        "ET",
+        "BT ROR",
+        "Setpoint",
+        "Profile BT",
+        "Profile Fan",
+        "Burner",
+      ],
     },
     grid: { left: 52, right: 56, top: 40, bottom: 50 },
     tooltip: {

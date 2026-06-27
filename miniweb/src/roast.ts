@@ -1241,7 +1241,6 @@ const createApp = () => div(
       }),
       span({ class: "conn-text" }, () => connectionStatus.val),
     ),
-    RoastTitle,
     div(
       { class: "topbar-clock" },
       () => (state.val.roast ? RoastTime() : "00:00"),
@@ -1300,58 +1299,6 @@ const createApp = () => div(
             "°C/min",
           ),
           ReadingCard("Setpoint", () => setpoint.val.toFixed(1), "°C"),
-        ),
-      ),
-      // Events panel under Readings.  Buttons are 2-across, 3 rows, and
-      // color-coded along the bean-color progression (green raw -> brown
-      // medium -> near-black post-drop).
-      div(
-        { class: "panel-section" },
-        div({ class: "panel-title" }, "Events"),
-        div(
-          { class: "event-grid" },
-          button(
-            {
-              class: "event-btn event-charge",
-              onclick: () => appendEvent("charge"),
-            },
-            "Charge",
-          ),
-          button(
-            {
-              class: "event-btn event-dry",
-              onclick: () => appendEvent("dry-end"),
-            },
-            "Dry End",
-          ),
-          button(
-            {
-              class: "event-btn event-crack1",
-              onclick: () => appendEvent("first-crack-start"),
-            },
-            "1st Crack",
-          ),
-          button(
-            {
-              class: "event-btn event-crack1-end",
-              onclick: () => appendEvent("first-crack-end"),
-            },
-            "1st End",
-          ),
-          button(
-            {
-              class: "event-btn event-crack2",
-              onclick: () => appendEvent("second-crack-start"),
-            },
-            "2nd Crack",
-          ),
-          button(
-            {
-              class: "event-btn event-drop",
-              onclick: () => appendEvent("drop"),
-            },
-            "Drop",
-          ),
         ),
       ),
     ),
@@ -1500,6 +1447,78 @@ const createApp = () => div(
       ),
     ),
 
+  // --- Roast name row (full width, between controls and events) -------
+  // Moved out of the topbar so vertical space up there isn't crowded in
+  // portrait orientation, and so the name + timestamp sit next to the
+  // controls the operator is touching most.
+  div(
+    { class: "dashboard-card roast-name-row" },
+    RoastTitle,
+    div(
+      { class: "roast-name-actions" },
+      DownloadButton,
+      DownloadChartButton,
+      SaveToDeviceButton,
+    ),
+  ),
+
+  // --- Events row (full width, under controls) -------------------------
+  // Color-coded along the bean-color progression (green raw -> brown
+  // medium -> near-black post-drop).  Pulled out of the readings sidebar
+  // when we went portrait so readings can stack 4-tall next to the chart.
+  div(
+    { class: "dashboard-card events-area" },
+    div(
+      { class: "panel-section" },
+      div({ class: "panel-title" }, "Events"),
+      div(
+        { class: "event-grid" },
+        button(
+          {
+            class: "event-btn event-charge",
+            onclick: () => appendEvent("charge"),
+          },
+          "Charge",
+        ),
+        button(
+          {
+            class: "event-btn event-dry",
+            onclick: () => appendEvent("dry-end"),
+          },
+          "Dry End",
+        ),
+        button(
+          {
+            class: "event-btn event-crack1",
+            onclick: () => appendEvent("first-crack-start"),
+          },
+          "1st Crack",
+        ),
+        button(
+          {
+            class: "event-btn event-crack1-end",
+            onclick: () => appendEvent("first-crack-end"),
+          },
+          "1st End",
+        ),
+        button(
+          {
+            class: "event-btn event-crack2",
+            onclick: () => appendEvent("second-crack-start"),
+          },
+          "2nd Crack",
+        ),
+        button(
+          {
+            class: "event-btn event-drop",
+            onclick: () => appendEvent("drop"),
+          },
+          "Drop",
+        ),
+      ),
+    ),
+  ),
+
   // --- Collapsible settings ---------------------------------------------
   div(
     { class: "settings-row" },
@@ -1549,9 +1568,6 @@ const createApp = () => div(
       summary({ class: "settings-summary" }, "Saved Roasts"),
       div(
         { class: "roast-io" },
-        DownloadButton,
-        DownloadChartButton,
-        SaveToDeviceButton,
         UploadButton,
       ),
       SavedRoastsList,

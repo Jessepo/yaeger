@@ -664,7 +664,7 @@ input[type="range"]:disabled {
    matches the sidebar's natural height. */
 .dashboard-top {
   display: grid;
-  grid-template-columns: 1fr 220px;
+  grid-template-columns: 1fr 110px;
   gap: 8px;
   align-items: stretch;
 }
@@ -706,13 +706,39 @@ input[type="range"]:disabled {
   /* Full-width card under the profile strip. */
 }
 
+/* Roast-name row: thin full-width card between controls and events.
+ * Hosts the RoastTitle (name input + timestamp) on the left and the
+ * Download/Save action buttons on the right.  flex-wrap lets the
+ * actions drop below the title when the viewport gets too narrow. */
+.roast-name-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 8px;
+}
+.roast-name-row .topbar-roast-title {
+  justify-self: initial;
+}
+.roast-name-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+
 /* Heater | Fan side-by-side at the top of the controls card.  Setpoint
- * (or Target BT) and the BT/ET toggle sit full-width below this row. */
+ * (or Target BT) and the BT/ET toggle sit full-width below this row.
+ * align-items: start so the two .control headers line up at the top —
+ * with align-items: end the .control's bottom-margin (only present on
+ * non-last-child) shoves the heater up 8px relative to the fan. */
 .controls-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  align-items: end;
+  align-items: start;
 }
 
 #liveChart {
@@ -745,7 +771,7 @@ input[type="range"]:disabled {
 
 .readings-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 4px;
 }
 
@@ -856,7 +882,7 @@ input[type="range"]:disabled {
 
 .event-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
 }
 
@@ -1125,7 +1151,7 @@ input[type="range"]:disabled {
   border-color: #e5743a !important;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 640px) {
   .topbar {
     grid-template-columns: 1fr;
   }
