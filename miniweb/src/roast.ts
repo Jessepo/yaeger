@@ -643,9 +643,11 @@ const UploadButton = () => {
 
 const RoastTime = () => {
   const start = state.val.roast?.startDate ?? new Date();
+  const measurements = state.val.roast?.measurements;
   const last =
-    state.val.roast!.measurements[state.val.roast!.measurements.length - 1]
-      .timestamp;
+    measurements && measurements.length > 0
+      ? measurements[measurements.length - 1].timestamp
+      : start;
   return getFormattedTimeDifference(start, last);
 };
 

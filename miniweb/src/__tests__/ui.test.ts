@@ -69,6 +69,7 @@ vi.mock('../chart', () => {
     updateChart: vi.fn(),
     updateProfileLines: vi.fn(),
     highlightTime: vi.fn(),
+    resetChartZoom: vi.fn(),
     sgSmooth: vi.fn((data) => data),
     computeSGKernel: vi.fn(() => []),
   };
@@ -86,7 +87,7 @@ vi.mock('../websocket', async (importOriginal) => {
 // Import App logic dynamically after mocks are set up
 import { roastApp, updateFanPower, updateHeaterPower } from '../roast';
 import { RoasterStatus, YaegerState } from '../model';
-import { profile } from '../profiling';
+import { profile, profileLoadTick } from '../profiling';
 
 // Override window.fetch in JSDOM sandbox explicitly
 if (typeof window !== 'undefined') {
@@ -205,5 +206,43 @@ describe('UI Button Click Integration Tests', () => {
     );
     // Button states should go back to idle
     expect(startBtn.disabled).toBe(false);
+  });
+
+  it('supports changing fan offset while following profile in PID mode', async () => {
+    const startBtn = appElement.querySelector('.btn-start') as HTMLButtonElement;
+    
+    // Set up profile to have fan values
+    profile.val = {
+      steps: [
+        { interpolation: 'linear', setpoint: 100, duration: 60, fanValue: 50 },
+        { interpolation: 'linear', setpoint: 150, duration: 60, fanValue: 60 }
+      ]
+    };
+    profileLoadTick.val++;
+    
+    // Start the roast
+    startBtn.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    // Locate the "Fan offset (vs profile)" slider
+    const labels = Array.from(appElement.querySelectorAll('.control-label'));
+    const fanOffsetLabel = labels.find(el => el.textContent === 'Fan offset (vs profile)');
+    expect(fanOffsetLabel).toBeDefined();
+    
+    const controlDiv = fanOffsetLabel!.closest('.control');
+    expect(controlDiv).not.toBeNull();
+    
+    const inputElement = controlDiv!.querySelector('input[type="range"]') as HTMLInputElement;
+    expect(inputElement).not.toBeNull();
+    
+    // Change fan offset value
+    inputElement.value = '10';
+    inputElement.dispatchEvent(new Event('input'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    // Verify setFanOffset command was sent
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'setFanOffset', value: 10 })
+    );
   });
 });
