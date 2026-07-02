@@ -33,14 +33,14 @@ import {
 const { label, button, div, input, span, h1, h2, details, summary, header, img } = van.tags;
 
 // State variables
-const slider1Value = van.state(50);
-const slider2Value = van.state(50);
-const state = van.state(new YaegerState());
+export const slider1Value = van.state(50);
+export const slider2Value = van.state(50);
+export const state = van.state(new YaegerState());
 
 const setpoint = van.state(20);
-const pidPFactor = van.state(1.0);
-const pidIFactor = van.state(0.1);
-const pidDFactor = van.state(0.01);
+export const pidPFactor = van.state(1.0);
+export const pidIFactor = van.state(0.1);
+export const pidDFactor = van.state(0.01);
 
 // Saved roasts storage
 interface SavedRoast {
@@ -51,19 +51,19 @@ const savedRoasts = van.state<SavedRoast[]>([]);
 
 // Dashboard state
 const currentROR = van.state<number | null>(null);
-const currentMode = van.state<"Manual" | "PID">("Manual");
-const currentTarget = van.state<"BT" | "ET">("BT");
-const fanOffset = van.state(0);
+export const currentMode = van.state<"Manual" | "PID">("Manual");
+export const currentTarget = van.state<"BT" | "ET">("BT");
+export const fanOffset = van.state(0);
 const cooldownFanSpeed = van.state(50);
 const roastName = van.state("");
 const fanMode = van.state<"pwm" | "ssr">("pwm");
 const fanModeChanged = van.state(false);  // shows reboot-needed notice when toggled
-const cooling = van.state(false); // true between End Roast click and BT<50°C
-const showSaveModal = van.state(false);
+export const cooling = van.state(false); // true between End Roast click and BT<50°C
+export const showSaveModal = van.state(false);
 // Target BT for auto-drop while following a profile.  Once BT crosses this
 // value, the same code path as End Roast is fired (drop event + cool-down
 // + save modal at 50°C).  Default 220°C ≈ Full City roast finish.
-const targetBT = van.state(220);
+export const targetBT = van.state(220);
 const wifiSSID = van.state("");
 const wifiPass = van.state("");
 const wifiMessage = van.state("");
@@ -84,12 +84,16 @@ van.derive(() => {
 
 // When a profile is *loaded* from outside the editor (file, device,
 // or → Profile from a saved roast), treat it like a Clear Reset and
-// auto-enable PID so the user is one click away from Start Roast.
-// Editor edits do NOT bump profileLoadTick, so they don't trigger this.
+// auto-enable PID + follow BT so the user is one click away from Start
+// Roast.  Editor edits do NOT bump profileLoadTick, so they don't
+// trigger this.
 van.derive(() => {
   if (profileLoadTick.val <= 0) return; // skip the initial 0
   resetRoast();
-  if (profile.val) setMode("PID");
+  if (profile.val) {
+    setMode("PID");
+    setTarget("BT");
+  }
 });
 
 // Mirror profile edits to firmware while a roast is running.  Skip the
@@ -484,8 +488,13 @@ async function saveRoastBundle() {
   }
 }
 
-// Reactive child function (returns Node | null).  VanJS calls this each
-// time showSaveModal.val changes and swaps the DOM accordingly.
+// Reactive child function (returns Node | null).  VanJS calls this
+// each time showSaveModal.val changes and swaps the DOM accordingly.
+//
+// KNOWN BUG (todo #13): in some contexts VanJS doesn't reattach the
+// Node when this flips null→div after the initial mount.  Punted for
+// now — investigate later.  Manually verify the modal by watching the
+// live dashboard reach cool-down.
 const SaveRoastModal = () =>
   showSaveModal.val
     ? div(
@@ -499,39 +508,39 @@ const SaveRoastModal = () =>
             }
           },
         },
-        div(
-          { class: "modal" },
-          h2({ class: "modal-title" }, "Roast complete"),
-          div(
-            { class: "modal-row" },
-            label(
-              { class: "modal-label" },
-              "Roast name",
-              input({
-                type: "text",
-                class: "modal-input",
-                placeholder: "e.g., Ethiopia Yirgacheffe",
-                value: roastName.val || "",
-                oninput: (e: Event) => {
-                  modalNameInput.val = (e.target as HTMLInputElement).value;
-                },
-              }),
-            ),
-          ),
-          () =>
-            modalStatus.val
-              ? div({ class: "modal-status" }, modalStatus.val)
-              : null,
-          div(
-            { class: "modal-actions" },
-            button(
-              { class: "modal-save-btn", onclick: saveRoastBundle },
-              "Save + Download",
-            ),
-            button({ onclick: closeSaveModal }, "Close"),
-          ),
+    div(
+      { class: "modal" },
+      h2({ class: "modal-title" }, "Roast complete"),
+      div(
+        { class: "modal-row" },
+        label(
+          { class: "modal-label" },
+          "Roast name",
+          input({
+            type: "text",
+            class: "modal-input",
+            placeholder: "e.g., Ethiopia Yirgacheffe",
+            value: roastName.val || "",
+            oninput: (e: Event) => {
+              modalNameInput.val = (e.target as HTMLInputElement).value;
+            },
+          }),
         ),
-      )
+      ),
+      () =>
+        modalStatus.val
+          ? div({ class: "modal-status" }, modalStatus.val)
+          : null,
+      div(
+        { class: "modal-actions" },
+        button(
+          { class: "modal-save-btn", onclick: saveRoastBundle },
+          "Save + Download",
+        ),
+        button({ onclick: closeSaveModal }, "Close"),
+      ),
+    ),
+  )
     : null;
 
 const DownloadChartButton = () => {
@@ -1085,7 +1094,7 @@ const RoastTitle = () =>
     ),
   );
 
-function setMode(m: "Manual" | "PID") {
+export function setMode(m: "Manual" | "PID") {
   currentMode.val = m;
   followProfileEnabled.val = m === "PID";
   sendCommand({ id: 1, Mode: m });
@@ -1108,7 +1117,7 @@ function allOff() {
 // Clear the local roast state and tell firmware to end any running roast.
 // Used by the "Clear Reset" top-bar button and by every profile-load path
 // so the chart is fresh and ready for the next Start Roast.
-function resetRoast() {
+export function resetRoast() {
   if (state.val.currentState.status === RoasterStatus.roasting) {
     sendCommand({ id: 1, command: "endRoast" });
   }
@@ -1665,6 +1674,15 @@ van.derive(() => {
     followProfileEnabled.val = false;
     slider1Value.val = 0;
     slider2Value.val = 0;
+    // Roast is done — return to idle so End Roast disables and clicking
+    // it doesn't re-arm cool-down (turning the fan back on for a moment).
+    state.val = {
+      ...state.val,
+      currentState: {
+        ...state.val.currentState,
+        status: RoasterStatus.idle,
+      },
+    };
     // Open the save modal.
     showSaveModal.val = true;
   }

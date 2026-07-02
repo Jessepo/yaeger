@@ -1071,6 +1071,16 @@ input[type="range"]:disabled {
    Save-roast modal (post-cool-down)
    ============================================================================ */
 
+/* Modal is always in the DOM; visibility toggles via reactive class
+ * (was previously a null-vs-Node reactive child, which VanJS didn't
+ * reattach reliably when state flipped back to true). */
+.modal-backdrop-hidden {
+  display: none !important;
+}
+.modal-status-hidden {
+  display: none;
+}
+
 .modal-backdrop {
   position: fixed;
   top: 0;
