@@ -281,6 +281,18 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         serializeJson(resp, out);
         client->text(out);
       }
+
+      if (command != nullptr && strncmp(command, "getData", 7) == 0) {
+        JsonDocument resp;
+        JsonObject root = resp.to<JsonObject>();
+        root["id"] = ln_id;
+        JsonObject d = root["data"].to<JsonObject>();
+        d["ET"] = control->getExhaustTemp();
+        d["BT"] = control->getBeanTemp();
+        String out;
+        serializeJson(resp, out);
+        client->text(out);
+      }
     }
     break;
     default:
