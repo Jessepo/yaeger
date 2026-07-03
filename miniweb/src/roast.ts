@@ -13,7 +13,6 @@ import {
   followProfileEnabled,
   profile,
   profileName,
-  profileLoadTick,
   ProfileControl,
   ProfileEditor,
   selectedPointTime,
@@ -21,11 +20,11 @@ import {
   profileFromPoints,
   roastToProfile,
 } from "./profiling.ts";
+import type { Profile } from "./model.ts";
 import {
   lastMessage,
   lastUpdate,
   connectionStatus,
-  pendingCommandCount,
   reconnectTick,
   sendCommand,
 } from "./websocket";
@@ -35,6 +34,19 @@ const { label, button, div, input, span, h1, h2, details, summary, header, img }
 // State variables
 export const slider1Value = van.state(50);
 export const slider2Value = van.state(50);
+
+// Guard against the "slider flicker" that happens when a status
+// message arrives mid-drag: the WS handler used to unconditionally
+// overwrite slider1/2Value from message.FanVal / BurnerVal, which
+// would snap the thumb back to the last firmware-known position
+// while the user was still dragging.  We now stamp the last time
+// the user changed each slider and suppress the sync inside a
+// short window.
+let lastUserFanEditMs = 0;
+let lastUserHeaterEditMs = 0;
+const USER_SLIDER_LOCKOUT_MS = 2000;
+function noteUserFanEdit() { lastUserFanEditMs = Date.now(); }
+function noteUserHeaterEdit() { lastUserHeaterEditMs = Date.now(); }
 export const state = van.state(new YaegerState());
 
 const setpoint = van.state(20);
@@ -58,12 +70,16 @@ const cooldownFanSpeed = van.state(50);
 const roastName = van.state("");
 const fanMode = van.state<"pwm" | "ssr">("pwm");
 const fanModeChanged = van.state(false);  // shows reboot-needed notice when toggled
-export const cooling = van.state(false); // true between End Roast click and BT<50°C
-export const showSaveModal = van.state(false);
-// Target BT for auto-drop while following a profile.  Once BT crosses this
-// value, the same code path as End Roast is fired (drop event + cool-down
-// + save modal at 50°C).  Default 220°C ≈ Full City roast finish.
+// Kept as a legacy chart-annotation state (auto-drop functionality was
+// removed; the value survives in case we want to draw a target line on
+// the chart later).
 export const targetBT = van.state(220);
+
+// Convenience predicates over the single RoasterStatus enum — reads
+// cleaner at call-sites than repeating the tag comparison.
+const isCooling = () => state.val.currentState.status === RoasterStatus.cooling;
+const isRoasting = () => state.val.currentState.status === RoasterStatus.roasting;
+const isIdle = () => state.val.currentState.status === RoasterStatus.idle;
 const wifiSSID = van.state("");
 const wifiPass = van.state("");
 const wifiMessage = van.state("");
@@ -82,19 +98,20 @@ van.derive(() => {
   highlightTime(chart, selectedPointTime.val);
 });
 
-// When a profile is *loaded* from outside the editor (file, device,
-// or → Profile from a saved roast), treat it like a Clear Reset and
-// auto-enable PID + follow BT so the user is one click away from Start
-// Roast.  Editor edits do NOT bump profileLoadTick, so they don't
-// trigger this.
-van.derive(() => {
-  if (profileLoadTick.val <= 0) return; // skip the initial 0
+// Explicit "loaded a fresh profile" path — call this instead of setting
+// profile.val directly when the profile comes from outside the editor
+// (file upload, device library, or → Profile from a saved roast).
+// Resets the roast state and arms PID + BT so the user is one click
+// from Start Roast.  Editor edits should set profile.val directly and
+// SKIP this so they don't wipe measurements mid-tweak.
+export function loadProfile(p: Profile | undefined) {
   resetRoast();
-  if (profile.val) {
+  profile.val = p;
+  if (p) {
     setMode("PID");
     setTarget("BT");
   }
-});
+}
 
 // Mirror profile edits to firmware while a roast is running.  Skip the
 // initial mount (profile.val is undefined then) and don't bother when
@@ -190,8 +207,6 @@ van.derive(() => {
           },
           profile: profile.val,
         };
-        // Pull the 1Hz backfill.
-        sendCommand({ id: 1, command: "getRoastHistory" });
       } else if (!m.following && state.val.currentState.status === RoasterStatus.roasting) {
         // Firmware ended the roast while we were away.
         state.val = {
@@ -202,47 +217,17 @@ van.derive(() => {
       return;
     }
 
-    // Backfill history: replace measurements with the firmware's 1Hz log.
-    if (message.type === "roastHistory") {
-      const m = message as unknown as {
-        samples: Array<{ t: number; et: number; bt: number; sp: number; fan: number; bur: number }>;
-      };
-      if (state.val.roast) {
-        const startMs = state.val.roast.startDate.getTime();
-        const backfilled: Measurement[] = m.samples.map((s) => ({
-          timestamp: new Date(startMs + s.t * 1000),
-          message: {
-            ET: s.et,
-            BT: s.bt,
-            FanVal: s.fan,
-            BurnerVal: s.bur,
-            Amb: 0,
-            id: 0,
-            Setpoint: s.sp,
-          },
-          extra: {
-            setpoint: s.sp,
-            pidData: { enabled: true, kp: pidPFactor.val, ki: pidIFactor.val, kd: pidDFactor.val },
-          },
-        }));
-        state.val = {
-          ...state.val,
-          roast: { ...state.val.roast, measurements: backfilled },
-        };
-        updateChart(chart, state.val.roast!);
-      }
-      return;
-    }
-
     console.log("Processing new message:", message);
 
-    // Update UI elements directly
-    console.log("Updating sliders:", {
-      fan: message.FanVal,
-      heater: message.BurnerVal
-    });
-    slider1Value.val = message.FanVal;
-    slider2Value.val = message.BurnerVal;
+    // Update UI elements directly, but honour the lockout window so
+    // status echoes don't fight active user drags.
+    const now = Date.now();
+    if (now - lastUserFanEditMs > USER_SLIDER_LOCKOUT_MS) {
+      slider1Value.val = message.FanVal;
+    }
+    if (now - lastUserHeaterEditMs > USER_SLIDER_LOCKOUT_MS) {
+      slider2Value.val = message.BurnerVal;
+    }
 
     // Sync mode/target/setpoint from firmware
     if (message.Mode === "PID" || message.Mode === "Auto") currentMode.val = "PID";
@@ -262,11 +247,7 @@ van.derive(() => {
 
     console.log("New state object created:", newState);
 
-    if (
-      state.val.roast != null &&
-      !cooling.val &&
-      (state.val.currentState.status == RoasterStatus.roasting || state.val.roast.measurements.length > 0)
-    ) {
+    if (state.val.roast != null && isRoasting()) {
       console.log("Processing roast state update");
       const newMeasurement: [Measurement] = [
         {
@@ -413,135 +394,6 @@ var DownloadButton = () => {
     "Download JSON",
   );
 };
-
-// Module-level state for the save modal so SaveRoastModal can be a
-// simple reactive function (returning a Node or null), the only kind
-// of "child function" VanJS handles correctly.
-const modalNameInput = van.state("");
-const modalStatus = van.state("");
-
-function closeSaveModal() {
-  showSaveModal.val = false;
-  modalStatus.val = "";
-}
-
-async function saveRoastBundle() {
-  const r = state.val.roast;
-  if (!r || r.measurements.length === 0) {
-    closeSaveModal();
-    return;
-  }
-  const name = (modalNameInput.val || roastName.val || "").trim();
-  if (!name) {
-    modalStatus.val = "Please enter a name first.";
-    return;
-  }
-  // Persist back to the dashboard's title so future actions inherit it.
-  roastName.val = name;
-  modalStatus.val = "Saving…";
-  const ts = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "-");
-  const saveName = `${name.replace(/\s+/g, "-")}-${ts}`;
-
-  try {
-    // 1. Save to device (1 Hz downsampled to keep LittleFS happy).
-    const payload = downsampleTo1Hz(r);
-    const resp = await fetch(
-      `/api/roast/save?name=${encodeURIComponent(saveName)}`,
-      {
-        method: "POST",
-        body: JSON.stringify(payload),
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      modalStatus.val = `Save to device failed: ${text || resp.status}`;
-      return;
-    }
-
-    // 2. Download JSON locally (full 10 Hz).
-    const blob = new Blob([JSON.stringify(r)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a1 = document.createElement("a");
-    a1.href = url;
-    a1.download = `${saveName}.json`;
-    a1.click();
-    URL.revokeObjectURL(url);
-
-    // 3. Download chart PNG.
-    const dataUrl = (chart as unknown as {
-      getDataURL: (opts: object) => string;
-    }).getDataURL({
-      type: "png",
-      pixelRatio: 2,
-      backgroundColor: "#38424e",
-    });
-    const a2 = document.createElement("a");
-    a2.href = dataUrl;
-    a2.download = `${saveName}.png`;
-    a2.click();
-
-    modalStatus.val = "✓ Saved + downloaded";
-    setTimeout(closeSaveModal, 1200);
-  } catch (e) {
-    modalStatus.val = `Error: ${(e as Error).message}`;
-  }
-}
-
-// Reactive child function (returns Node | null).  VanJS calls this
-// each time showSaveModal.val changes and swaps the DOM accordingly.
-//
-// KNOWN BUG (todo #13): in some contexts VanJS doesn't reattach the
-// Node when this flips null→div after the initial mount.  Punted for
-// now — investigate later.  Manually verify the modal by watching the
-// live dashboard reach cool-down.
-const SaveRoastModal = () =>
-  showSaveModal.val
-    ? div(
-        {
-          class: "modal-backdrop",
-          onclick: (e: Event) => {
-            if (
-              (e.target as HTMLElement).classList.contains("modal-backdrop")
-            ) {
-              closeSaveModal();
-            }
-          },
-        },
-    div(
-      { class: "modal" },
-      h2({ class: "modal-title" }, "Roast complete"),
-      div(
-        { class: "modal-row" },
-        label(
-          { class: "modal-label" },
-          "Roast name",
-          input({
-            type: "text",
-            class: "modal-input",
-            placeholder: "e.g., Ethiopia Yirgacheffe",
-            value: roastName.val || "",
-            oninput: (e: Event) => {
-              modalNameInput.val = (e.target as HTMLInputElement).value;
-            },
-          }),
-        ),
-      ),
-      () =>
-        modalStatus.val
-          ? div({ class: "modal-status" }, modalStatus.val)
-          : null,
-      div(
-        { class: "modal-actions" },
-        button(
-          { class: "modal-save-btn", onclick: saveRoastBundle },
-          "Save + Download",
-        ),
-        button({ onclick: closeSaveModal }, "Close"),
-      ),
-    ),
-  )
-    : null;
 
 const DownloadChartButton = () => {
   const disabled = van.derive(() => {
@@ -828,9 +680,8 @@ async function loadRoastAsProfileFromDevice(roastName: string) {
       return;
     }
     const newProfile = profileFromPoints(points);
-    profile.val = newProfile;
+    loadProfile(newProfile);
     profileName.val = `${clean}-from-roast`;
-    profileLoadTick.val++;
     console.log(`Converted "${clean}" to a ${points.length}-point profile.`);
   } catch (error) {
     console.error("Failed to convert roast to profile:", error);
@@ -1111,14 +962,21 @@ function allOff() {
   followProfileEnabled.val = false;
   slider1Value.val = 0;
   slider2Value.val = 0;
-  cooling.val = false;
+  // If we're mid-cool-down when the user smashes All Off, jump straight
+  // to idle.  The BT<50 watcher's early-exit will handle the rest.
+  if (isCooling()) {
+    state.val = {
+      ...state.val,
+      currentState: { ...state.val.currentState, status: RoasterStatus.idle },
+    };
+  }
 }
 
 // Clear the local roast state and tell firmware to end any running roast.
 // Used by the "Clear Reset" top-bar button and by every profile-load path
 // so the chart is fresh and ready for the next Start Roast.
 export function resetRoast() {
-  if (state.val.currentState.status === RoasterStatus.roasting) {
+  if (!isIdle()) {
     sendCommand({ id: 1, command: "endRoast" });
   }
   state.val = {
@@ -1126,14 +984,6 @@ export function resetRoast() {
     currentState: { ...state.val.currentState, status: RoasterStatus.idle },
     roast: undefined,
   };
-  // Reset every per-roast transient state so the next Start Roast begins
-  // from a freshly-booted feel — no lingering markers, modals, or flags.
-  cooling.val = false;
-  autoDropFired = false;
-  coolDownTriggered = false;
-  showSaveModal.val = false;
-  modalNameInput.val = "";
-  modalStatus.val = "";
   // Empty chart — updateChart's measurements-empty branch wipes BT/ET/ROR/
   // Setpoint/Burner data AND the BT series' markLine+markPoint (where the
   // event markers live), so charge/dry/crack/drop annotations don't carry
@@ -1342,6 +1192,7 @@ const createApp = () => div(
             disabled: () =>
               currentMode.val === "PID" || !canRunHeater(),
             onChange: (v) => {
+              noteUserHeaterEdit();
               slider2Value.val = v;
               updateHeaterPower(v);
             },
@@ -1363,6 +1214,7 @@ const createApp = () => div(
                   class: () =>
                     `toggle ${slider1Value.val > 0 ? "active" : ""}`,
                   onclick: () => {
+                    noteUserFanEdit();
                     const next = slider1Value.val > 0 ? 0 : 100;
                     slider1Value.val = next;
                     updateFanPower(next);
@@ -1400,45 +1252,25 @@ const createApp = () => div(
                   max: 100,
                   step: 5,
                   onChange: (v) => {
+                    noteUserFanEdit();
                     slider1Value.val = v;
                     updateFanPower(v);
                   },
                 });
           },
         ),
-        // When following a profile under PID, the setpoint is driven by
-        // firmware-side interpolation — the user can't usefully adjust it
-        // here.  Repurpose the slider as "Target BT" so they can set the
-        // BT at which the roast auto-drops.  In any other mode it stays
-        // as a regular Setpoint slider.
-        () => {
-          const autoDropMode =
-            currentMode.val === "PID" && profile.val != null;
-          return autoDropMode
-            ? Slider({
-                label: "Target BT (auto-drop)",
-                unit: "°C",
-                state: targetBT,
-                min: 150,
-                max: 260,
-                step: 1,
-                onChange: (v) => {
-                  targetBT.val = v;
-                },
-              })
-            : Slider({
-                label: "Setpoint",
-                unit: "°C",
-                state: setpoint,
-                min: 0,
-                max: 300,
-                step: 1,
-                onChange: (v) => {
-                  setpoint.val = v;
-                  sendCommand({ id: 1, Setpoint: v });
-                },
-              });
-        },
+        Slider({
+          label: "Setpoint",
+          unit: "°C",
+          state: setpoint,
+          min: 0,
+          max: 300,
+          step: 1,
+          onChange: (v) => {
+            setpoint.val = v;
+            sendCommand({ id: 1, Setpoint: v });
+          },
+        }),
         div(
           { class: "target-toggle" },
           span({ class: "target-label" }, "Target"),
@@ -1589,9 +1421,6 @@ const createApp = () => div(
       UploadRoastInput,
     ),
   ),
-
-  // Post-cool-down save modal (overlay).
-  SaveRoastModal,
 );
 
 function toggleRoastStart() {
@@ -1634,20 +1463,22 @@ function toggleRoastStart() {
   }
 }
 
-// Drop sequence: record event, ask firmware to stop following, then enter
-// cool-down (Manual, heater 0, fan to cooldownFanSpeed).  We stay in
-// roasting status while cooling, but cooling.val gates the measurement-
-// append in the WS handler so the chart + roast timer freeze at the
-// drop moment.  The BT<50 watcher and save modal handle the transition
-// back to idle.
-//
-// Called from: End Roast button (toggleRoastStart) and the auto-drop
-// derive that watches BT reaching targetBT during a profile-followed roast.
+// Drop sequence: record event, ask firmware to stop following, transition
+// to cool-down phase, and set outputs for cool-down (Manual, heater 0,
+// fan to cooldownFanSpeed).  The measurement-append gate in the WS
+// handler checks isRoasting(), so the chart + timer freeze the moment
+// we enter cooling.  Called from the End Roast button.
 function triggerDrop() {
-  if (cooling.val) return; // already dropped + cooling, don't double-fire
+  if (!isRoasting()) return; // only meaningful while actively roasting
   appendEvent("drop");
   sendCommand({ id: 1, command: "endRoast" });
-  cooling.val = true;
+  state.val = {
+    ...state.val,
+    currentState: {
+      ...state.val.currentState,
+      status: RoasterStatus.cooling,
+    },
+  };
   setMode("Manual");
   updateFanPower(cooldownFanSpeed.val);
   updateHeaterPower(0);
@@ -1655,27 +1486,17 @@ function triggerDrop() {
   slider2Value.val = 0;
 }
 
-// Watch BT during cool-down: once it drops below 50 °C, exit cool-down,
-// All Off, and open the save modal.
-let coolDownTriggered = false;
+// Watch BT during cool-down: once it drops below 50 °C, exit cool-down
+// and return to idle (all off, sliders zeroed).
 van.derive(() => {
   const m = lastMessage.val;
-  if (!cooling.val) {
-    coolDownTriggered = false;
-    return;
-  }
-  if (coolDownTriggered) return;
+  if (!isCooling()) return;
   if (m && typeof m.BT === "number" && m.BT < 50) {
-    coolDownTriggered = true;
-    cooling.val = false;
-    // Trigger All Off so the fan stops too.
     sendCommand({ id: 1, command: "allOff" });
     currentMode.val = "Manual";
     followProfileEnabled.val = false;
     slider1Value.val = 0;
     slider2Value.val = 0;
-    // Roast is done — return to idle so End Roast disables and clicking
-    // it doesn't re-arm cool-down (turning the fan back on for a moment).
     state.val = {
       ...state.val,
       currentState: {
@@ -1683,31 +1504,6 @@ van.derive(() => {
         status: RoasterStatus.idle,
       },
     };
-    // Open the save modal.
-    showSaveModal.val = true;
-  }
-});
-
-// Auto-drop: when in PID mode following a profile, if BT reaches the
-// user-set targetBT, fire triggerDrop() (same as the End Roast button).
-// Only arms once per roast — resets when the roast goes idle or once
-// the drop has been fired.
-let autoDropFired = false;
-van.derive(() => {
-  const m = lastMessage.val;
-  if (
-    state.val.currentState.status !== RoasterStatus.roasting ||
-    cooling.val
-  ) {
-    autoDropFired = false;
-    return;
-  }
-  if (autoDropFired) return;
-  if (currentMode.val !== "PID" || !profile.val) return;
-  if (!m || typeof m.BT !== "number") return;
-  if (m.BT >= targetBT.val) {
-    autoDropFired = true;
-    triggerDrop();
   }
 });
 

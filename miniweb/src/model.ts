@@ -27,9 +27,16 @@ export class YaegerState  {
 	profile?: Profile
 }
 
+// Single source of truth for where we are in the roast lifecycle.
+// Was previously spread across:
+//   - state.currentState.status (idle/roasting)
+//   - cooling.val (bool)
+//   - coolDownTriggered (module-level let)
+// Consolidated to one enum so the guards can't drift out of sync.
 export enum RoasterStatus {
-	idle,
-	roasting
+	idle,       // no roast active
+	roasting,   // charge → drop
+	cooling,    // drop → BT<50; chart frozen, End Roast disabled
 }
 
 export type CurrentState = {

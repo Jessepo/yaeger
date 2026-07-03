@@ -242,7 +242,6 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         d["following"] = control->isFollowing();
         d["roastElapsedSec"] = control->getRoastElapsedSec();
         d["fanOffset"] = control->getFanOffset();
-        d["historyCount"] = control->getHistoryCount();
         JsonArray pts = d["profile"].to<JsonArray>();
         ProfilePoint snap[MAX_PROFILE_POINTS];
         int snapN = control->snapshotActiveProfile(snap);
@@ -257,30 +256,6 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         client->text(out);
       }
 
-      // Webapp asks for the 1 Hz history buffer (backfill the chart on
-      // reconnect). At 1 Hz × 30 min cap = 1800 samples ≈ 50 KB JSON.
-      if (command != nullptr && strncmp(command, "getRoastHistory", 15) == 0) {
-        JsonDocument resp;
-        JsonObject root = resp.to<JsonObject>();
-        root["id"] = ln_id;
-        JsonObject d = root["data"].to<JsonObject>();
-        d["type"] = "roastHistory";
-        JsonArray arr = d["samples"].to<JsonArray>();
-        int n = control->getHistoryCount();
-        for (int i = 0; i < n; i++) {
-          const RoastSample &s = control->getHistorySample(i);
-          JsonObject o = arr.add<JsonObject>();
-          o["t"] = s.elapsedSec;
-          o["et"] = s.et / 10.0f;
-          o["bt"] = s.bt / 10.0f;
-          o["sp"] = s.setpoint;
-          o["fan"] = s.fan;
-          o["bur"] = s.burner;
-        }
-        String out;
-        serializeJson(resp, out);
-        client->text(out);
-      }
     }
     break;
     default:
@@ -338,7 +313,6 @@ void WSRequestHandler::loop() {
   // Roast execution state — webapp uses these to reflect firmware-owned roast.
   resultData["following"] = control->isFollowing();
   resultData["roastElapsedSec"] = control->getRoastElapsedSec();
-  resultData["historyCount"] = control->getHistoryCount();
 
   String output;
   serializeJson(doc, output);

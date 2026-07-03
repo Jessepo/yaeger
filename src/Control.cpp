@@ -212,12 +212,6 @@ void Control::loop() {
   }
 
   _heater.setValue(heaterValue);
-
-  // 1 Hz history sample for the chart-backfill on reconnect.
-  if (_following && (now - _lastHistorySampleMs) >= 1000) {
-    recordHistorySample();
-    _lastHistorySampleMs = now;
-  }
 }
 
 float Control::getRoastElapsedSec() const {
@@ -294,34 +288,6 @@ void Control::applyProfileAt(float elapsedSec) {
   }
 }
 
-void Control::recordHistorySample() {
-  RoastSample &s = _history[(_historyHead + _historyCount) % HISTORY_CAPACITY];
-  s.elapsedSec = (uint16_t)min((unsigned long)0xFFFF, (unsigned long)getRoastElapsedSec());
-  s.setpoint = (uint16_t)max(0.f, min(65535.f, _autotune.getSetpoint()));
-  s.et = (int16_t)(_etSensor.getValue() * 10.f);
-  s.bt = (int16_t)(_btSensor.getValue() * 10.f);
-  s.fan = (uint8_t)min(100.f, max(0.f, getFan()));
-  s.burner = (uint8_t)min(100.f, max(0.f, _autotune.getOutput()));
-  s.flags = 0;
-  s._pad = 0;
-  if (_historyCount < HISTORY_CAPACITY) {
-    _historyCount++;
-  } else {
-    // Overwriting oldest; advance head.
-    _historyHead = (_historyHead + 1) % HISTORY_CAPACITY;
-  }
-}
-
-const RoastSample &Control::getHistorySample(int chronologicalIdx) const {
-  return _history[(_historyHead + chronologicalIdx) % HISTORY_CAPACITY];
-}
-
-void Control::clearHistory() {
-  _historyHead = 0;
-  _historyCount = 0;
-  _lastHistorySampleMs = 0;
-}
-
 void Control::setActiveProfile(const ProfilePoint *points, int count) {
   if (count > MAX_PROFILE_POINTS) count = MAX_PROFILE_POINTS;
   if (count < 0) count = 0;
@@ -345,15 +311,10 @@ int Control::snapshotActiveProfile(ProfilePoint *outPoints) {
 void Control::startRoast() {
   _following = true;
   _roastStartMs = millis();
-  _lastHistorySampleMs = 0;
-  clearHistory();
   // Switch to PID mode so the autotune controller actually does its job.
   _autotune.setOperationalMode(OperationalMode::Auto);
   // Apply the t=0 setpoint/fan immediately.
   if (_profilePointCount > 0) applyProfileAt(0.f);
-  // Take the first sample so the chart isn't empty.
-  recordHistorySample();
-  _lastHistorySampleMs = millis();
 }
 
 void Control::endRoast() {
