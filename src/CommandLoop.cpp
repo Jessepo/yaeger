@@ -256,6 +256,20 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         client->text(out);
       }
 
+      // Artisan-compatible ET/BT query.  Kept from the incoming
+      // "maybe fixed artisan connection?" commit; the sibling
+      // getRoastHistory handler was dropped in the streamline pass.
+      if (command != nullptr && strncmp(command, "getData", 7) == 0) {
+        JsonDocument resp;
+        JsonObject root = resp.to<JsonObject>();
+        root["id"] = ln_id;
+        JsonObject d = root["data"].to<JsonObject>();
+        d["ET"] = control->getExhaustTemp();
+        d["BT"] = control->getBeanTemp();
+        String out;
+        serializeJson(resp, out);
+        client->text(out);
+      }
     }
     break;
     default:
