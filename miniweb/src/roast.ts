@@ -220,12 +220,21 @@ van.derive(() => {
     console.log("Processing new message:", message);
 
     // Update UI elements directly, but honour the lockout window so
-    // status echoes don't fight active user drags.
+    // status echoes don't fight active user drags.  Guard on the field
+    // actually being a number — the Artisan-compat `getData` response
+    // only carries ET/BT, so unconditional writes would poke `undefined`
+    // into the sliders once a second and show "undefined%" in the UI.
     const now = Date.now();
-    if (now - lastUserFanEditMs > USER_SLIDER_LOCKOUT_MS) {
+    if (
+      typeof message.FanVal === "number" &&
+      now - lastUserFanEditMs > USER_SLIDER_LOCKOUT_MS
+    ) {
       slider1Value.val = message.FanVal;
     }
-    if (now - lastUserHeaterEditMs > USER_SLIDER_LOCKOUT_MS) {
+    if (
+      typeof message.BurnerVal === "number" &&
+      now - lastUserHeaterEditMs > USER_SLIDER_LOCKOUT_MS
+    ) {
       slider2Value.val = message.BurnerVal;
     }
 
