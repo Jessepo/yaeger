@@ -4,7 +4,7 @@
 #include <ElegantOTA.h> //https://github.com/ayushsharma82/AsyncElegantOTA
 #include <LittleFS.h>
 #include <Preferences.h>
-
+#include "yaeger_modbus.h"
 #include "AsyncWebSocket.h"
 #include "CommandLoop.h"
 #include "HardwareSerial.h"
@@ -64,6 +64,19 @@ void onOTAEnd(bool success) {
 }
 
 void setup() {
+  
+  YaegerModbusHooks h;
+  h.getBT            = []() { return currentBT; };          // your BT float
+  h.getET            = []() { return currentET; };          // your ET float
+  h.getHeaterPercent = []() { return heaterDuty; };         // 0-100
+  h.getFanPercent    = []() { return fanSpeed; };           // 0-100
+  h.profileRunning   = []() { return roastFollowActive; };  // firmware-owned roast flag
+  h.tcFault          = []() { return max31855Fault; };
+  h.setHeaterPercent = [](uint8_t v) { setHeater(v); };     // same path setBurner uses
+  h.setFanPercent    = [](uint8_t v) { setFan(v); };
+  h.allOff           = []()          { allOff(); };
+  yaegerModbusBegin(h);
+  
   setupLogging(&server);
   log("Starting Setup");
   pixels.begin();
@@ -136,4 +149,5 @@ void loop() {
     preferences.putFloat(pidDKey, control->getKd());
     control->resetAutotune();
   }
+  yaegerModbusTask();   // non-blocking
 }
