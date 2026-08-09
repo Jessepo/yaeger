@@ -164,3 +164,27 @@ sort of damage or injury caused by Yaeger, either directly or indirectly.
 **You do this at your own risk**
 
 ## You have been warned
+
+## Artisan over Modbus RTU
+
+Yaeger also includes a Modbus RTU bridge for Artisan-Scope over USB serial. The firmware exposes these registers:
+
+- 100: BT temperature in °C × 10
+- 101: ET temperature in °C × 10
+- 102: heater readback (0–100)
+- 103: fan readback (0–100)
+- 104: status register (bit 0 = profile running, bit 1 = thermocouple fault, bit 2 = watchdog tripped)
+- 200: heater command (0–100)
+- 201: fan command (0–100)
+- 202: all-off trigger (write 1 to stop heater/fan and cancel follow mode)
+
+For Artisan, use:
+
+- Input 1 → register 100, divider 1/10 for BT
+- Input 2 → register 101, divider 1/10 for ET
+- Burner slider → `write([1,200,{}])`
+- Air slider → `write([1,201,{}])`
+- An emergency button → `write([1,202,1])`
+
+The Modbus serial port should be kept quiet; avoid sending debug text to the same serial stream that Artisan uses. In the current firmware build, the Modbus setup is wired in [src/yaeger_modbus.cpp](src/yaeger_modbus.cpp) and initialized from [src/main.cpp](src/main.cpp).
+For my ESP32 that's the port on the left for this, port on the right for uploading/debug
