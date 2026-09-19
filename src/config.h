@@ -41,6 +41,9 @@
 
 #define DEBUG false
 
+// UART to crack listener board (separate ESP32-S3)
+#define CRACK_RX_PIN 17
+#define CRACK_TX_PIN 18
 
 // DEVICE PARAMETERS
 #define MAX_HEATER_POWER 65

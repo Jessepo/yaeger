@@ -9,6 +9,7 @@
 #include "HardwareSerial.h"
 #include "WiFiType.h"
 #include "api.h"
+#include "config.h"
 #include "display.h"
 #include "logging.h"
 #include "wifi_setup.h"
@@ -81,7 +82,6 @@ void setup() {
     Serial.println("LittleFS failed");
   }
   if (!LittleFS.exists("/roasts")) LittleFS.mkdir("/roasts");
-  if (!LittleFS.exists("/profiles")) LittleFS.mkdir("/profiles");
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
   server.serveStatic("/settings", LittleFS, "/").setDefaultFile("index.html");
   server.serveStatic("/editor", LittleFS, "/").setDefaultFile("index.html");
@@ -95,13 +95,9 @@ void setup() {
 
 
 
-  control = new Control(
-    preferences.getFloat(pidPKey,1),
-    preferences.getFloat(pidIKey,0.1),
-    preferences.getFloat(pidDKey,0.01),
-    StringToTarget(preferences.getString(temperatureTargetKey,"ET")),
-    preferences.getString(fanModeKey, "pwm") == "ssr"
-  );
+  Serial2.begin(115200, SERIAL_8N1, CRACK_RX_PIN, CRACK_TX_PIN);
+
+  control = new Control(preferences.getString(fanModeKey, "pwm") == "ssr");
 
   // WebSocket handler
   wsHandler = new WSRequestHandler(&ws, control, &preferences);
@@ -129,10 +125,4 @@ void loop() {
   wsHandler->loop();
   updateDisplay(control);
   updateLeds(control);
-  if (control->hasAutotuneResults()) {
-    preferences.putFloat(pidPKey, control->getKp());
-    preferences.putFloat(pidIKey, control->getKi());
-    preferences.putFloat(pidDKey, control->getKd());
-    control->resetAutotune();
-  }
 }

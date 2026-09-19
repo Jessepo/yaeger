@@ -2,7 +2,6 @@
 #include "logging.h"
 #include "Control.h"
 #include <ArduinoJson.h>
-#include <cmath>
 #include <cstring>
 #include <Preferences.h>
 #include <WiFi.h>
@@ -19,282 +18,139 @@ WSRequestHandler::WSRequestHandler(AsyncWebSocket *ws, Control *control, Prefere
   this->ws->onEvent(std::bind(&WSRequestHandler::onWsEvent, this, _1, _2, _3, _4, _5, _6));
 }
 
+void WSRequestHandler::sendEvent(const char *event) {
+  char buf[64];
+  snprintf(buf, sizeof(buf), "{\"message\":\"%s\"}", event);
+  ws->textAll(buf);
+}
+
 void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
                                  AwsEventType type, void *arg, uint8_t *data, size_t len) {
   switch (type) {
     case WS_EVT_CONNECT:
       logf("[%u] Connected!\n", client->id());
-      // client->text("Connected");
-
       break;
-    case WS_EVT_DISCONNECT: {
+
+    case WS_EVT_DISCONNECT:
       logf("[%u] Disconnected!\n", client->id());
-      // turn off heater and set fan to 100% when not under PID control
-      if (this->control->getMode() == OperationalMode::Manual && control->getHeater() > 0.f) {
-        control->setHeater(0.f);
-        control->setFan(100.f);
+      // If the last client leaves and the heater is on, kill it.
+      if (ws->count() == 0 && control->getHeater() > 0.f) {
+        control->allOff();
       }
-    }
-    break;
+      break;
+
     case WS_EVT_DATA: {
       auto *info = (AwsFrameInfo *) arg;
-
       String msg = "";
-      /*if (info->opcode != WS_TEXT || !info->final) {*/
-      /*  break;*/
-      /*}*/
-
-      for (size_t i = 0; i < info->len; i++) {
-        msg += (char) data[i];
-      }
-
+      for (size_t i = 0; i < info->len; i++) msg += (char) data[i];
 
       JsonDocument doc;
-
-      // DEBUG WEBSOCKET
-      // logf("[%u] get Text: %s\n", num, payload);
-
-      // Extract Values lt. https://arduinojson.org/v6/example/http-client/
-      // Artisan Anleitung: https://artisan-scope.org/devices/websockets/
-
       deserializeJson(doc, msg);
-
-      // Any incoming command counts as activity for the safety watchdog.
-      control->noteWsActivity();
 
       long ln_id = doc["id"].as<long>();
 
-
-      if (!doc["Mode"].isNull() && strncmp(doc["Mode"].as<const char *>(), "Manual", 6) == 0) {
-        control->setMode(OperationalMode::Manual);
-      }
-
-      if (!doc["Mode"].isNull() && strncmp(doc["Mode"].as<const char *>(), "PID", 3) == 0) {
-        control->setMode(OperationalMode::Auto);
-      }
-
-      if (!doc["BurnerVal"].isNull()) {
-        auto val = doc["BurnerVal"].as<float>();
-        if (DEBUG) logf("BurnerVal: %6.1lf\n", val);
-        // DimmerVal = doc["BurnerVal"].as<long>();
-        control->setHeater(val);
-      }
-
-      if (!doc["Setpoint"].isNull()) {
-        auto setpoint = doc["Setpoint"].as<float>();
-        if (DEBUG) logf("Setpoint: %6.1lf\n", setpoint);
-        control->setSetpoint(setpoint);
-      }
-
-      if (!doc["FanVal"].isNull()) {
-        auto fanVal = doc["FanVal"].as<float>();
-        if (DEBUG) logf("FanVal: %6.1lf\n", fanVal);
-        control->setFan(fanVal);
-      }
-
-      if (!doc["Target"].isNull()) {
-        String targetInput = doc["Target"];
-        auto target = StringToTarget(targetInput);
-        control->setTemperatureTarget(target);
-        preferences->putString(temperatureTargetKey, targetInput);
-      }
-
-      // Send Values to Artisan over Websocket
+      // Artisan WebSocket protocol — Anleitung: https://artisan-scope.org/devices/websockets/
       const char *command = doc["command"].as<const char *>();
-      if (command != nullptr && strncmp(command, "setBurner", 9) == 0) {
-        auto val = doc["value"].as<float>();
-        if (DEBUG) logf("BurnerVal: %d\n", val);
-        control->setHeater(val);
-      }
-      if (command != nullptr && strncmp(command, "setFan", 6) == 0) {
-        auto val = doc["value"].as<float>();
-        if (DEBUG) logf("FanVal: %d\n", val);
-        control->setFan(val);
-      }
 
-      if (command != nullptr && strncmp(command, "autotune", 8) == 0) {
-        if (control->getFan() < 30) control->setFan(60);
-        control->startAutotune();
-      }
-
-      // ----- New: firmware-owned profile execution ------------------------
-      // The webapp uploads the profile once, then hands off control. After
-      // this we no longer need per-tick Setpoint/FanVal commands during a
-      // roast; the firmware drives them autonomously from the loaded points.
-      auto parseProfilePoints = [&doc](ProfilePoint *out, int maxCount) -> int {
-        JsonArray arr = doc["points"].as<JsonArray>();
-        if (arr.isNull()) return 0;
-        int n = 0;
-        for (JsonObject p : arr) {
-          if (n >= maxCount) break;
-          out[n].timeSec = p["time"].as<float>();
-          out[n].setpoint = p["setpoint"].as<float>();
-          if (p["fan"].isNull()) {
-            out[n].fan = 0xFF;
-          } else {
-            int f = p["fan"].as<int>();
-            if (f < 0) f = 0;
-            if (f > 100) f = 100;
-            out[n].fan = (uint8_t)f;
-          }
-          n++;
-        }
-        return n;
-      };
-
-      if (command != nullptr &&
-          (strncmp(command, "setActiveProfile", 16) == 0 ||
-           strncmp(command, "updateActiveProfile", 19) == 0)) {
-        ProfilePoint pts[MAX_PROFILE_POINTS];
-        int n = parseProfilePoints(pts, MAX_PROFILE_POINTS);
-        control->setActiveProfile(pts, n);
-        if (DEBUG) logf("active profile loaded: %d points", n);
-      }
-
-      if (command != nullptr && strncmp(command, "startRoast", 10) == 0) {
-        control->startRoast();
-        log("roast started");
-      }
-
-      if (command != nullptr && strncmp(command, "endRoast", 8) == 0) {
-        control->endRoast();
-        log("roast ended");
-      }
-
-      if (command != nullptr && strncmp(command, "allOff", 6) == 0) {
-        control->allOff();
-        log("all off");
-      }
-
-      if (command != nullptr && strncmp(command, "setFanOffset", 12) == 0) {
-        int off = doc["value"].as<int>();
-        control->setFanOffset(off);
-      }
-
-      if (command != nullptr && strncmp(command, "setPreferences", 14) == 0) {
-        if (!doc["pidKp"].isNull() && !doc["pidKi"].isNull() && !doc["pidKd"].isNull()) {
-          auto pidKp = doc["pidKp"].as<float>();
-          auto pidKi = doc["pidKi"].as<float>();
-          auto pidKd = doc["pidKd"].as<float>();
-          preferences->putFloat(pidPKey, pidKp);
-          preferences->putFloat(pidIKey, pidKi);
-          preferences->putFloat(pidDKey, pidKd);
-          control->setPidValues(pidKp, pidKi, pidKd);
-        }
-
-        if (!doc["cooldownFanSpeed"].isNull()) {
-          long cooldownFanSpeed = doc["cooldownFanSpeed"].as<long>();
-          if (DEBUG) logf("cooldownFanSpeed: %d\n", cooldownFanSpeed);
-          preferences->putLong(coolingFanKey, cooldownFanSpeed);
-        }
-
-        if (!doc["fanMode"].isNull()) {
-          // "pwm" or "ssr" — applied at next boot.
-          String fanMode = doc["fanMode"].as<const char *>();
-          if (fanMode == "pwm" || fanMode == "ssr") {
-            preferences->putString(fanModeKey, fanMode);
-            if (DEBUG) logf("fanMode: %s (reboot to apply)", fanMode.c_str());
-          }
-        }
-
-
-        if (!doc["wifiSsid"].isNull() && !doc["wifiPass"].isNull()) {
-          if (DEBUG) log("Wifi Credentials found, saving...");
-          String wifiSSID = doc["wifiSsid"];
-          if (DEBUG) log(wifiSSID.c_str());
-          preferences->putString(wifiSSIDKey, wifiSSID);
-          String wifiPass = doc["wifiPass"];
-          log(wifiPass.c_str());
-          preferences->putString(wifiPassKey, wifiPass);
-        }
-      }
-
-      if (command != nullptr && (strncmp(command, "setPreferences", 14) == 0 || strncmp(command, "getPreferences", 14)
-                                 ==
-                                 0)) {
-        JsonObject root = doc.to<JsonObject>();
-        JsonObject resultData = root["data"].to<JsonObject>();
-
-        root["id"] = ln_id;
-        resultData["type"] = "preferences";
-        resultData["pidKp"] = preferences->getFloat(pidPKey, 1.0);
-        resultData["pidKi"] = preferences->getFloat(pidIKey, 0.1);
-        resultData["pidKd"] = preferences->getFloat(pidDKey, 0.01);
-        resultData["cooldownFanSpeed"] = preferences->getLong(coolingFanKey, 50);
-        resultData["fanMode"] = preferences->getString(fanModeKey, "pwm");
-
-        char buffer[200]; // create temp buffer
-        serializeJson(doc, buffer); // serialize to buffer
-        // DEBUG WEBSOCKET
-        if (DEBUG) log(buffer);
-
-        client->text(buffer);
-      }
-
-      // Webapp asks for full roast state on (re)connect so it can rebuild
-      // its local view. Includes the active profile points + flags.
-      if (command != nullptr && strncmp(command, "getRoastState", 13) == 0) {
-        JsonDocument resp;
-        JsonObject root = resp.to<JsonObject>();
-        root["id"] = ln_id;
-        JsonObject d = root["data"].to<JsonObject>();
-        d["type"] = "roastState";
-        d["following"] = control->isFollowing();
-        d["roastElapsedSec"] = control->getRoastElapsedSec();
-        d["fanOffset"] = control->getFanOffset();
-        JsonArray pts = d["profile"].to<JsonArray>();
-        ProfilePoint snap[MAX_PROFILE_POINTS];
-        int snapN = control->snapshotActiveProfile(snap);
-        for (int i = 0; i < snapN; i++) {
-          JsonObject o = pts.add<JsonObject>();
-          o["time"] = snap[i].timeSec;
-          o["setpoint"] = snap[i].setpoint;
-          if (snap[i].fan != 0xFF) o["fan"] = (int)snap[i].fan;
-        }
-        String out;
-        serializeJson(resp, out);
-        client->text(out);
-      }
-
-      // Artisan-compatible ET/BT query.  Kept from the incoming
-      // "maybe fixed artisan connection?" commit; the sibling
-      // getRoastHistory handler was dropped in the streamline pass.
       if (command != nullptr && strncmp(command, "getData", 7) == 0) {
         JsonDocument resp;
         JsonObject root = resp.to<JsonObject>();
         root["id"] = ln_id;
         JsonObject d = root["data"].to<JsonObject>();
-        d["ET"] = control->getExhaustTemp();
-        d["BT"] = control->getBeanTemp();
+        d["ET"]  = control->getExhaustTemp();
+        d["BT"]  = control->getBeanTemp();
+        d["CH3"] = control->getIRObjectTemp();
+        d["CH4"] = control->getIRAmbientTemp();
+        String out;
+        serializeJson(resp, out);
+        client->text(out);
+        return;
+      }
+
+      if (command != nullptr && strncmp(command, "setBurner", 9) == 0) {
+        control->setHeater(doc["value"].as<float>());
+        return;
+      }
+
+      if (command != nullptr && strncmp(command, "setFan", 6) == 0) {
+        control->setFan(doc["value"].as<float>());
+        return;
+      }
+
+      if (command != nullptr && strncmp(command, "allOff", 6) == 0) {
+        control->allOff();
+        log("all off");
+        return;
+      }
+
+      // Dashboard manual sliders (same effect as Artisan setBurner/setFan)
+      if (!doc["BurnerVal"].isNull()) {
+        control->setHeater(doc["BurnerVal"].as<float>());
+      }
+      if (!doc["FanVal"].isNull()) {
+        control->setFan(doc["FanVal"].as<float>());
+      }
+
+      if (command != nullptr &&
+          (strncmp(command, "setPreferences", 14) == 0 ||
+           strncmp(command, "getPreferences", 14) == 0)) {
+        if (strncmp(command, "setPreferences", 14) == 0) {
+          if (!doc["fanMode"].isNull()) {
+            String fanMode = doc["fanMode"].as<const char *>();
+            if (fanMode == "pwm" || fanMode == "ssr") {
+              preferences->putString(fanModeKey, fanMode);
+            }
+          }
+          if (!doc["wifiSsid"].isNull() && !doc["wifiPass"].isNull()) {
+            preferences->putString(wifiSSIDKey, doc["wifiSsid"].as<const char *>());
+            preferences->putString(wifiPassKey, doc["wifiPass"].as<const char *>());
+          }
+        }
+
+        JsonDocument resp;
+        JsonObject root = resp.to<JsonObject>();
+        root["id"] = ln_id;
+        JsonObject d = root["data"].to<JsonObject>();
+        d["type"]    = "preferences";
+        d["fanMode"] = preferences->getString(fanModeKey, "pwm");
         String out;
         serializeJson(resp, out);
         client->text(out);
       }
     }
     break;
+
     default:
       logf("unhandled message type: %d\n", type);
       break;
   }
 }
 
-
 void WSRequestHandler::loop() {
-  if (millis() - _lastUpdate < 100)
-    return; // Max update frequency 100ms
+  // Non-blocking UART read from crack listener board.
+  // Each complete line starting with "CRACK" triggers a first-crack event
+  // pushed to all connected WebSocket clients (Artisan + dashboard).
+  while (Serial2.available()) {
+    char c = (char) Serial2.read();
+    if (c == '\n') {
+      _crackLineBuf.trim();
+      if (_crackLineBuf.startsWith("CRACK")) {
+        log("First crack detected via UART — sending FCs event");
+        sendEvent("FCs");
+      }
+      _crackLineBuf = "";
+    } else {
+      _crackLineBuf += c;
+    }
+  }
 
-  // No subscribers? Nothing to do.  Skipping saves a JSON serialize and
-  // avoids piling messages into the AsyncWebSocket queue of a client that
-  // disconnected ungracefully (which is what causes
-  // "Too many messages queued: closing connection" in the serial log).
+  if (millis() - _lastUpdate < 100) return;
+
   if (this->ws->count() == 0) {
     this->_lastUpdate = millis();
     return;
   }
 
-  // Backpressure check: if any connected client's tx queue is full, skip
-  // this status frame.  Better to drop a status update than to have the
-  // AsyncWebSocket library close the connection due to queue overflow.
   bool backpressured = false;
   for (const auto &c : this->ws->getClients()) {
     if (c.queueIsFull()) {
@@ -309,24 +165,17 @@ void WSRequestHandler::loop() {
 
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
-  JsonObject resultData = root["data"].to<JsonObject>();
+  JsonObject d = root["data"].to<JsonObject>();
 
-  resultData["type"] = "status";
-  resultData["ET"] = control->getExhaustTemp();
-  resultData["BT"] = control->getBeanTemp();
-  resultData["Amb"] = control->getAmbientTemp();
-  resultData["BurnerVal"] = control->getHeater();
-  resultData["Setpoint"] = control->getSetpoint();
-  resultData["Target"] = control->getTemperatureTarget();
-  resultData["Mode"] = modeToChar(control->getMode());
-  resultData["FanVal"] = control->getFan();
-  resultData["pidKp"] = control->getKp();
-  resultData["pidKi"] = control->getKi();
-  resultData["pidKd"] = control->getKd();
-  resultData["wifiStrength"] = WiFi.RSSI();
-  // Roast execution state — webapp uses these to reflect firmware-owned roast.
-  resultData["following"] = control->isFollowing();
-  resultData["roastElapsedSec"] = control->getRoastElapsedSec();
+  d["type"]       = "status";
+  d["ET"]         = control->getExhaustTemp();
+  d["BT"]         = control->getBeanTemp();
+  d["Amb"]        = control->getAmbientTemp();
+  d["CH3"]        = control->getIRObjectTemp();
+  d["CH4"]        = control->getIRAmbientTemp();
+  d["BurnerVal"]  = control->getHeater();
+  d["FanVal"]     = control->getFan();
+  d["wifiStrength"] = WiFi.RSSI();
 
   String output;
   serializeJson(doc, output);
