@@ -6,16 +6,11 @@ export type YaegerMessage = {
   Amb: number;
   FanVal: number;
   BurnerVal: number;
+  CH3?: number;  // MLX90614 object temp (IR surface)
+  CH4?: number;  // MLX90614 ambient temp
   id: number;
-  Setpoint?: number;
-  Target?: string;
-  Mode?: string;
-  pidKp?: number;
-  pidKi?: number;
-  pidKd?: number;
   wifiStrength?: number;
   type?: string;
-  cooldownFanSpeed?: number;
   fanMode?: string;
 }
 
@@ -24,36 +19,23 @@ export class YaegerState  {
 	currentState: CurrentState =  {
 		status: RoasterStatus.idle
 	};
-	profile?: Profile
 }
 
-// Single source of truth for where we are in the roast lifecycle.
-// Was previously spread across:
-//   - state.currentState.status (idle/roasting)
-//   - cooling.val (bool)
-//   - coolDownTriggered (module-level let)
-// Consolidated to one enum so the guards can't drift out of sync.
 export enum RoasterStatus {
-	idle,       // no roast active
-	roasting,   // charge → drop
-	cooling,    // drop → BT<50; chart frozen, End Roast disabled
+	idle,
+	roasting,
+	cooling,
 }
 
 export type CurrentState = {
-	lastMessage?: YaegerMessage 
+	lastMessage?: YaegerMessage
 	lastUpdate?: Date
-	status: RoasterStatus 
+	status: RoasterStatus
 }
 
 export type Measurement = {
 	timestamp: Date
 	message: YaegerMessage
-	extra?: MeasurementExtra
-}
-
-export type MeasurementExtra = {
-	setpoint: number
-	pidData?: PIDData
 }
 
 export type RoastState = {
@@ -61,7 +43,6 @@ export type RoastState = {
 	measurements: Measurement[] | []
 	events: RoastEvent[] | []
 	commands: RoastCommand[] | []
-	profile?: Profile
 }
 
 export type RoastEvent = {
@@ -75,13 +56,7 @@ export type RoastCommand = {
 	timestamp: Date
 }
 
-export type PIDData = {
-	enabled: boolean
-	kp: number
-	ki: number
-	kd: number
-}
-
+// Kept for chart.ts profile-line drawing and profiling.ts
 export type Profile = {
 	steps: ProfileStep[]
 }
@@ -90,5 +65,5 @@ export type ProfileStep = {
 	interpolation: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out'
 	setpoint: number
 	duration: number
-  fanValue?: number
+	fanValue?: number
 }

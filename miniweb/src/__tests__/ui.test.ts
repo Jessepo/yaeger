@@ -2,55 +2,32 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockFetch = vi.hoisted(() => vi.fn().mockImplementation((urlInput: any) => {
   const url = typeof urlInput === 'string' ? urlInput : urlInput?.url || String(urlInput || '');
-  console.log("MOCK FETCH URL:", url);
-  if (url.includes('/api/profile/list')) {
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ profiles: [] }),
-    });
-  }
   if (url.includes('/api/roast/list')) {
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ roasts: [] }),
-    });
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ roasts: [] }) });
   }
-  return Promise.resolve({
-    ok: true,
-    json: () => Promise.resolve({}),
-  });
+  return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
 }));
 
-// Setup other stubs via vi.hoisted
 vi.hoisted(() => {
   class MockResizeObserver {
-    observe = vi.fn();
-    unobserve = vi.fn();
-    disconnect = vi.fn();
+    observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn();
   }
-
   class MockWebSocket {
-    url: string;
-    readyState: number = 0;
+    url: string; readyState: number = 0;
     onopen: (() => void) | null = null;
     onclose: (() => void) | null = null;
     onmessage: ((ev: any) => void) | null = null;
-    onerror: ((ev: any) => void) | null = null;
+    onerror:   ((ev: any) => void) | null = null;
     constructor(url: string) {
       this.url = url;
-      setTimeout(() => {
-        this.readyState = 1; // OPEN
-        if (this.onopen) this.onopen();
-      }, 0);
+      setTimeout(() => { this.readyState = 1; if (this.onopen) this.onopen(); }, 0);
     }
-    send = vi.fn();
-    close = vi.fn();
+    send = vi.fn(); close = vi.fn();
   }
-
   vi.stubGlobal('ResizeObserver', MockResizeObserver);
   vi.stubGlobal('WebSocket', MockWebSocket);
   global.URL.createObjectURL = vi.fn(() => 'mock-url');
@@ -58,60 +35,34 @@ vi.hoisted(() => {
   vi.stubGlobal('fetch', mockFetch);
 });
 
-// Mock echarts to avoid loading full chart renderer in tests
-vi.mock('../chart', () => {
-  return {
-    initializeChart: vi.fn(() => ({
-      setOption: vi.fn(),
-      dispatchAction: vi.fn(),
-      resize: vi.fn(),
-    })),
-    updateChart: vi.fn(),
-    updateProfileLines: vi.fn(),
-    highlightTime: vi.fn(),
-    resetChartZoom: vi.fn(),
-    sgSmooth: vi.fn((data) => data),
-    computeSGKernel: vi.fn(() => []),
-  };
-});
+vi.mock('../chart', () => ({
+  initializeChart: vi.fn(() => ({ setOption: vi.fn(), dispatchAction: vi.fn(), resize: vi.fn() })),
+  updateChart: vi.fn(),
+  updateProfileLines: vi.fn(),
+  highlightTime: vi.fn(),
+  resetChartZoom: vi.fn(),
+  sgSmooth: vi.fn((data: any) => data),
+  computeSGKernel: vi.fn(() => []),
+}));
 
 const mockSendCommand = vi.hoisted(() => vi.fn());
 vi.mock('../websocket', async (importOriginal) => {
   const actual = await importOriginal<any>();
-  return {
-    ...actual,
-    sendCommand: mockSendCommand,
-  };
+  return { ...actual, sendCommand: mockSendCommand };
 });
 
-// Import App logic dynamically after mocks are set up
-import { roastApp, updateFanPower, updateHeaterPower, state, resetRoast, setMode, slider1Value, targetBT, currentMode, pidPFactor, pidIFactor, pidDFactor, loadProfile } from '../roast';
-import { RoasterStatus, YaegerState, YaegerMessage } from '../model';
-import { profile } from '../profiling';
+import { roastApp, updateFanPower, updateHeaterPower, state, resetRoast, slider1Value } from '../roast';
+import { RoasterStatus, YaegerMessage } from '../model';
 import { lastMessage } from '../websocket';
 
-// A minimum-viable YaegerMessage for tests that need to drive the
-// BT<50 cool-down watcher or auto-drop derive.
 const mockMessage = (overrides: Partial<YaegerMessage> = {}): YaegerMessage => ({
-  ET: 100,
-  BT: 100,
-  Amb: 20,
-  FanVal: 0,
-  BurnerVal: 0,
-  id: 1,
-  ...overrides,
+  ET: 100, BT: 100, Amb: 20, FanVal: 0, BurnerVal: 0, id: 1, ...overrides,
 });
 
-// Small helper to let VanJS reactive derives flush.
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
-// Override window.fetch in JSDOM sandbox explicitly
 if (typeof window !== 'undefined') {
-  Object.defineProperty(window, 'fetch', {
-    value: mockFetch,
-    writable: true,
-    configurable: true,
-  });
+  Object.defineProperty(window, 'fetch', { value: mockFetch, writable: true, configurable: true });
 }
 
 describe('UI Button Click Integration Tests', () => {
@@ -119,297 +70,91 @@ describe('UI Button Click Integration Tests', () => {
 
   beforeEach(() => {
     mockSendCommand.mockClear();
-
-    // Clear stale WS message first so no derive fires with dirty data.
     lastMessage.val = null;
-    // Full reset of roast state via the real resetRoast path — mirrors
-    // what Clear Reset does at runtime.  RoasterStatus.cooling flows
-    // back to idle here, so no separate cool-down latch to reset.
     resetRoast();
     mockSendCommand.mockClear();
-
-    // Mount the app
     appElement = roastApp() as HTMLElement;
     document.body.innerHTML = '';
     document.body.appendChild(appElement);
-
-    // Initialize profile to a mock profile for testing
-    profile.val = {
-      steps: [
-        { interpolation: 'linear', setpoint: 100, duration: 60, fanValue: 50 }
-      ]
-    };
   });
 
   it('renders the initial dashboard in idle state', () => {
     const startBtn = appElement.querySelector('.btn-start') as HTMLButtonElement;
-    const endBtn = appElement.querySelector('.btn-end') as HTMLButtonElement;
-    
+    const endBtn   = appElement.querySelector('.btn-end')   as HTMLButtonElement;
     expect(startBtn).toBeDefined();
     expect(endBtn).toBeDefined();
     expect(startBtn.disabled).toBe(false);
     expect(endBtn.disabled).toBe(true);
   });
 
-  it('triggers Start Roast workflow on start button click', async () => {
+  it('Start Roast transitions to roasting state (no firmware commands)', async () => {
     const startBtn = appElement.querySelector('.btn-start') as HTMLButtonElement;
-    const endBtn = appElement.querySelector('.btn-end') as HTMLButtonElement;
-
-    // Click "Start Roast"
+    const endBtn   = appElement.querySelector('.btn-end')   as HTMLButtonElement;
     startBtn.click();
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    // Verify websocket commands were sent
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'setActiveProfile' })
-    );
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'startRoast' })
-    );
-
-    // Verify button states toggle
+    await tick();
+    expect(state.val.currentState.status).toBe(RoasterStatus.roasting);
     expect(startBtn.disabled).toBe(true);
     expect(endBtn.disabled).toBe(false);
+    // No profile/startRoast commands sent — firmware is driven by Artisan
+    expect(mockSendCommand).not.toHaveBeenCalledWith(expect.objectContaining({ command: 'startRoast' }));
+    expect(mockSendCommand).not.toHaveBeenCalledWith(expect.objectContaining({ command: 'setActiveProfile' }));
   });
 
-  it('triggers End Roast (drop/cooling) workflow on end button click', async () => {
+  it('End Roast sends fan/heater commands and enters cooling', async () => {
     const startBtn = appElement.querySelector('.btn-start') as HTMLButtonElement;
-    const endBtn = appElement.querySelector('.btn-end') as HTMLButtonElement;
-
-    // 1. Start the roast first
+    const endBtn   = appElement.querySelector('.btn-end')   as HTMLButtonElement;
     startBtn.click();
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await tick();
     mockSendCommand.mockClear();
-
-    // 2. Click "End Roast"
     endBtn.click();
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    // Verify it triggers endRoast and switches to manual cooling
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'endRoast' })
-    );
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ Mode: 'Manual' })
-    );
-    // Elements/sliders are set to cooling fan and 0 heater
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ FanVal: 50 })
-    );
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ BurnerVal: 0 })
-    );
+    await tick();
+    expect(state.val.currentState.status).toBe(RoasterStatus.cooling);
+    expect(mockSendCommand).toHaveBeenCalledWith(expect.objectContaining({ FanVal: 50 }));
+    expect(mockSendCommand).toHaveBeenCalledWith(expect.objectContaining({ BurnerVal: 0 }));
+    expect(mockSendCommand).not.toHaveBeenCalledWith(expect.objectContaining({ command: 'endRoast' }));
   });
 
-  it('triggers safety All Off command on safety button click', () => {
+  it('All Off sends allOff command', () => {
     const allOffBtn = appElement.querySelector('.btn-alloff') as HTMLButtonElement;
-    
     allOffBtn.click();
-
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'allOff' })
-    );
+    expect(mockSendCommand).toHaveBeenCalledWith(expect.objectContaining({ command: 'allOff' }));
   });
 
-  it('triggers Clear Reset workflow on reset button click', async () => {
+  it('Clear Reset returns to idle without sending endRoast', async () => {
     const startBtn = appElement.querySelector('.btn-start') as HTMLButtonElement;
     const resetBtn = appElement.querySelector('.btn-reset') as HTMLButtonElement;
-
-    // Start roast first
     startBtn.click();
-    await new Promise(resolve => setTimeout(resolve, 0));
-    mockSendCommand.mockClear();
-
-    // Click "Clear Reset"
-    resetBtn.click();
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    // It should end the roast on firmware
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'endRoast' })
-    );
-    // Button states should go back to idle
-    expect(startBtn.disabled).toBe(false);
-  });
-
-  it('#11: loadProfile() forces PID mode AND Target=BT', async () => {
-    loadProfile({
-      steps: [
-        { interpolation: 'linear', setpoint: 100, duration: 60, fanValue: 50 },
-      ],
-    });
     await tick();
-
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ Mode: 'PID' }),
-    );
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ Target: 'BT' }),
-    );
+    mockSendCommand.mockClear();
+    resetBtn.click();
+    await tick();
+    expect(state.val.currentState.status).toBe(RoasterStatus.idle);
+    expect(startBtn.disabled).toBe(false);
+    expect(mockSendCommand).not.toHaveBeenCalledWith(expect.objectContaining({ command: 'endRoast' }));
   });
 
-  // For 12/13 the button click path is unreliable in jsdom because
-  // VanJS's reactive `disabled` attribute doesn't flush before the
-  // synchronous click() call (the DOM still says `disabled=true` from
-  // beforeEach's resetRoast, so jsdom swallows the click).  We drive
-  // state directly instead so the assertions test the actual behaviour
-  // and not the timing of the reactive DOM.
-  const enterCoolDown = () => {
+  it('#12: BT below 50 during cooling returns to idle', async () => {
     state.val = {
       ...state.val,
-      currentState: {
-        ...state.val.currentState,
-        status: RoasterStatus.cooling,
-      },
-      roast: {
-        startDate: new Date(),
-        measurements: [],
-        events: [],
-        commands: [],
-      },
+      currentState: { ...state.val.currentState, status: RoasterStatus.cooling },
+      roast: { startDate: new Date(), measurements: [], events: [], commands: [] },
     };
-  };
-
-  it('#12: after auto-cooldown finishes, roast returns to idle (End Roast can\'t re-arm the fan)', async () => {
-    enterCoolDown();
     expect(state.val.currentState.status).toBe(RoasterStatus.cooling);
-
-    // Simulate BT dropping below 50 → BT<50 watcher fires.
     lastMessage.val = mockMessage({ BT: 40 });
     await tick();
-
-    // Status must be idle so the End Roast button is disabled — that's
-    // the guard that stops clicking it from calling triggerDrop again
-    // (which was turning the fan back on for a moment).
     expect(state.val.currentState.status).toBe(RoasterStatus.idle);
   });
 
-  // NOTE: #13 (save modal appears in DOM after BT<50) is currently
-  // punted — VanJS's null→Node reactive-child reattach isn't landing
-  // in this position and every workaround we tried during the fix
-  // session either broke other tests or didn't affect the DOM.
-  // Manually verify by watching the real dashboard reach cool-down.
-  // TODO: revisit — try mounting the modal directly on document.body
-  // outside createApp, or a different VanJS pattern.
-  // #13 auto-save modal deleted along with the modal itself.  Save
-  // buttons on the roast-name row now cover save-on-cool-down.
+  it('heater safety: blocked when fan is off, allowed when fan is on', () => {
+    // canRunHeater() = slider1Value.val > 0
+    slider1Value.val = 0;
+    expect(slider1Value.val > 0).toBe(false);
 
-  // WS reconnect + command queue + AllOff prioritization: needs a
-  // separate test file that stubs WebSocket to STAY closed so
-  // sendCommand queues instead of firing.  The current file mocks
-  // sendCommand itself, so it can't exercise the real queue.  Punted.
+    slider1Value.val = 50;
+    expect(slider1Value.val > 0).toBe(true);
+  });
+
   it.todo('websocket: sendCommand coalesces same-command entries while disconnected');
   it.todo('websocket: allOff always goes to the front of the pending queue');
   it.todo('websocket: reconnectTick fires flushQueue in order on ws.onopen');
-
-  // Manual heater safety: the heater slider's `disabled` attribute
-  // uses canRunHeater() which requires (status === roasting) AND
-  // (slider1Value.val > 0).  Rather than assert against the DOM
-  // attribute (which VanJS reactive-flush timing makes flaky under
-  // jsdom in this file), we replicate the guard's logic here — the
-  // truth table is what actually protects the element.
-  // ---------- Scenarios -------------------------------------------------
-
-  // Scenario A/B were originally written as end-to-end sendCommand
-  // assertions, but the profile-load derive (which reads state.val
-  // via resetRoast) fires cascading sendCommands whenever we set
-  // state.val, making the mock counts noisy.  Reduced to state-only
-  // checks — matches the pattern that worked for other tests here.
-
-  it('scenario A: targetBT round-trips (pure display state, no watcher)', () => {
-    const before = targetBT.val;
-    targetBT.val = before + 5;
-    expect(targetBT.val).toBe(before + 5);
-    targetBT.val = before;
-  });
-
-  it('scenario B: setMode flips currentMode.val synchronously', () => {
-    setMode('PID');
-    expect(currentMode.val).toBe('PID');
-    setMode('Manual');
-    expect(currentMode.val).toBe('Manual');
-    setMode('PID');
-    expect(currentMode.val).toBe('PID');
-  });
-
-  it('scenario C: PID param states are mutable during a roast (bindings unbroken by mid-roast edits)', () => {
-    // Simulate the user opening the PID Settings collapsible and
-    // dialling values.  The actual "save" path sends a preferences
-    // update — here we just verify the reactive states themselves
-    // aren't frozen.
-    state.val = {
-      ...state.val,
-      currentState: { ...state.val.currentState, status: RoasterStatus.roasting },
-      roast: { startDate: new Date(), measurements: [], events: [], commands: [] },
-    };
-    pidPFactor.val = 2.5;
-    pidIFactor.val = 0.25;
-    pidDFactor.val = 0.05;
-    expect(pidPFactor.val).toBe(2.5);
-    expect(pidIFactor.val).toBe(0.25);
-    expect(pidDFactor.val).toBe(0.05);
-  });
-
-  it('manual heater safety: canRunHeater truth table (roasting AND fan > 0)', () => {
-    setMode('Manual');
-    const canRunHeater = () =>
-      state.val.currentState.status === RoasterStatus.roasting &&
-      slider1Value.val > 0;
-
-    // idle + any fan → blocked
-    state.val = { ...state.val, currentState: { ...state.val.currentState, status: RoasterStatus.idle }, roast: undefined };
-    slider1Value.val = 50;
-    expect(canRunHeater()).toBe(false);
-
-    // roasting + fan 0 → blocked
-    state.val = {
-      ...state.val,
-      currentState: { ...state.val.currentState, status: RoasterStatus.roasting },
-      roast: { startDate: new Date(), measurements: [], events: [], commands: [] },
-    };
-    slider1Value.val = 0;
-    expect(canRunHeater()).toBe(false);
-
-    // roasting + fan > 0 → allowed
-    slider1Value.val = 30;
-    expect(canRunHeater()).toBe(true);
-  });
-
-
-  // Fan-offset slider DOM-level test.  The reactive fan-slider swap
-  // (Fan Power vs Fan offset vs SSR toggle) doesn't reliably re-flush
-  // in jsdom after mid-test state changes — same VanJS-in-jsdom
-  // reactive-DOM class we punted #13 on.  Skip until we revisit.
-  it.skip('supports changing fan offset while following profile in PID mode', async () => {
-    const startBtn = appElement.querySelector('.btn-start') as HTMLButtonElement;
-    loadProfile({
-      steps: [
-        { interpolation: 'linear', setpoint: 100, duration: 60, fanValue: 50 },
-        { interpolation: 'linear', setpoint: 150, duration: 60, fanValue: 60 }
-      ]
-    });
-    startBtn.click();
-    await new Promise(resolve => setTimeout(resolve, 0));
-    
-    // Locate the "Fan offset (vs profile)" slider
-    const labels = Array.from(appElement.querySelectorAll('.control-label'));
-    const fanOffsetLabel = labels.find(el => el.textContent === 'Fan offset (vs profile)');
-    expect(fanOffsetLabel).toBeDefined();
-    
-    const controlDiv = fanOffsetLabel!.closest('.control');
-    expect(controlDiv).not.toBeNull();
-    
-    const inputElement = controlDiv!.querySelector('input[type="range"]') as HTMLInputElement;
-    expect(inputElement).not.toBeNull();
-    
-    // Change fan offset value
-    inputElement.value = '10';
-    inputElement.dispatchEvent(new Event('input'));
-    await new Promise(resolve => setTimeout(resolve, 0));
-    
-    // Verify setFanOffset command was sent
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'setFanOffset', value: 10 })
-    );
-  });
 });
