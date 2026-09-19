@@ -22,22 +22,9 @@ Upon first launch, Yaeger will set up its own access point. You can then configu
 connect to from the Web UI (see below). After setting up the preffered Wifi, Yaeger will try to connect to it on every
 boot. If it can't connect to the preffered Wifi, Yaeger will fallback to its own access point (so you can set up Wifi
 again).
-This repo also includes a sample config for Artisan-Scope.
-
 #### Artisan Scope
 
 Load the config, found in `./artisan-settings.aset` into Artisan-Scope, change the server ip to match yours and click the on button.
-
-> **Don't mix flows.** The firmware can either be driven by Artisan (Artisan sends `setBurner` /
-> `setFan` directly to the heater + fan) or by the dashboard's profile execution (Start Roast →
-> firmware autonomously interpolates the setpoint and runs PID). If you click **Start Roast** in
-> the dashboard, the firmware re-writes the setpoint every ~100 ms from the loaded profile, and
-> Artisan's burner commands will get overwritten. Pick one:
->
-> * **Artisan-driven**: leave PID **off** in the dashboard's PID Settings panel and don't press
->   Start Roast. The dashboard becomes a live viewer; Artisan has full control.
-> * **Dashboard-driven**: load a profile, press Start Roast. Artisan can still read temps but
->   can't move the burner.
 
 #### Web interface
 
@@ -165,26 +152,3 @@ sort of damage or injury caused by Yaeger, either directly or indirectly.
 
 ## You have been warned
 
-## Artisan over Modbus RTU
-
-Yaeger also includes a Modbus RTU bridge for Artisan-Scope over USB serial. The firmware exposes these registers:
-
-- 100: BT temperature in °C × 10
-- 101: ET temperature in °C × 10
-- 102: heater readback (0–100)
-- 103: fan readback (0–100)
-- 104: status register (bit 0 = profile running, bit 1 = thermocouple fault, bit 2 = watchdog tripped)
-- 200: heater command (0–100)
-- 201: fan command (0–100)
-- 202: all-off trigger (write 1 to stop heater/fan and cancel follow mode)
-
-For Artisan, use:
-
-- Input 1 → register 100, divider 1/10 for BT
-- Input 2 → register 101, divider 1/10 for ET
-- Burner slider → `write([1,200,{}])`
-- Air slider → `write([1,201,{}])`
-- An emergency button → `write([1,202,1])`
-
-The Modbus serial port should be kept quiet; avoid sending debug text to the same serial stream that Artisan uses. In the current firmware build, the Modbus setup is wired in [src/yaeger_modbus.cpp](src/yaeger_modbus.cpp) and initialized from [src/main.cpp](src/main.cpp).
-For my ESP32 that's the port on the left for this, port on the right for uploading/debug

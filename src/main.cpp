@@ -4,7 +4,6 @@
 #include <ElegantOTA.h> //https://github.com/ayushsharma82/AsyncElegantOTA
 #include <LittleFS.h>
 #include <Preferences.h>
-#include "yaeger_modbus.h"
 #include "AsyncWebSocket.h"
 #include "CommandLoop.h"
 #include "HardwareSerial.h"
@@ -64,25 +63,6 @@ void onOTAEnd(bool success) {
 }
 
 void setup() {
-  
-  YaegerModbusHooks h;
-  h.getBT            = []() { return control ? control->getBeanTemp() : 0.0f; };
-  h.getET            = []() { return control ? control->getExhaustTemp() : 0.0f; };
-  h.getHeaterPercent = []() {
-    if (!control) return (uint8_t)0;
-    return (uint8_t)constrain(control->getHeater(), 0.0f, 100.0f);
-  };
-  h.getFanPercent    = []() {
-    if (!control) return (uint8_t)0;
-    return (uint8_t)constrain(control->getFan(), 0.0f, 100.0f);
-  };
-  h.profileRunning   = []() { return control ? control->isFollowing() : false; };
-  h.tcFault          = []() { return false; };
-  h.setHeaterPercent = [](uint8_t v) { if (control) control->setHeater((float)v); };
-  h.setFanPercent    = [](uint8_t v) { if (control) control->setFan((float)v); };
-  h.allOff           = []() { if (control) control->allOff(); };
-  yaegerModbusBegin(h);
-  
   setupLogging(&server);
   log("Starting Setup");
   pixels.begin();
@@ -155,5 +135,4 @@ void loop() {
     preferences.putFloat(pidDKey, control->getKd());
     control->resetAutotune();
   }
-  yaegerModbusTask();   // non-blocking
 }
