@@ -19,6 +19,7 @@ ArduinoFFT<float> FFT = ArduinoFFT<float>();
 float vReal[SAMPLES], vImag[SAMPLES];
 Adafruit_NeoPixel pixel(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
 
+static bool monitorMode = false;
 int crackcount = 0, counttime = 0;
 bool isthis1stcount, isthis2ndcount, isthis3rdcount, newscan = 1;
 unsigned long recordmillis1, recordmillis2, recordmillis3;
@@ -60,9 +61,25 @@ void setup() {
 }
 
 void loop() {
+  if (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == 'm') monitorMode = true;
+    else if (c == 'x') monitorMode = false;
+  }
+
   int32_t raw[SAMPLES];
   size_t bytes_read;
   i2s_read(I2S_NUM_0, raw, sizeof(raw), &bytes_read, portMAX_DELAY);
+
+  if (monitorMode) {
+    uint8_t hdr[2] = {0xAA, 0x55};
+    Serial.write(hdr, 2);
+    int16_t pcm[SAMPLES];
+    for (int i = 0; i < SAMPLES; i++) pcm[i] = (int16_t)(raw[i] >> 16);
+    Serial.write((uint8_t*)pcm, SAMPLES * 2);
+    return;
+  }
+
   for (int i = 0; i < SAMPLES; i++) {
     vReal[i] = (float)(raw[i] >> 14);
     vImag[i] = 0;

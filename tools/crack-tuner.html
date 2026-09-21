@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crack Detector Tuner</title>
+  <style>
+    :root {
+      --bg: #111;
+      --surface: #1c1c1c;
+      --border: #333;
+      --text: #ddd;
+      --dim: #666;
+      --green: #4caf50;
+      --red: #f44336;
+      --yellow: #ffeb3b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, monospace; padding: 16px; }
+    h1 { font-size: 16px; font-weight: 600; }
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    #status { padding: 3px 10px; border-radius: 3px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; }
+    #status.connected { border-color: var(--green); color: var(--green); }
+    #status.error { border-color: var(--red); color: var(--red); }
+    button { padding: 5px 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 3px; cursor: pointer; font-size: 13px; }
+    button:hover:not(:disabled) { background: #252525; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    #crack-flash {
+      height: 36px; line-height: 36px; text-align: center; font-size: 20px; font-weight: bold;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 3px;
+      margin-bottom: 8px; transition: background 0.08s, color 0.08s; color: var(--dim);
+    }
+    #crack-flash.active { background: var(--red); color: #fff; border-color: var(--red); }
+    canvas { display: block; width: 100%; border: 1px solid var(--border); border-radius: 3px; margin-bottom: 6px; image-rendering: pixelated; }
+    .controls { display: flex; gap: 20px; flex-wrap: wrap; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 3px; margin-bottom: 10px; }
+    .ctrl { display: flex; flex-direction: column; gap: 5px; min-width: 180px; flex: 1; }
+    .ctrl label { display: flex; justify-content: space-between; font-size: 12px; }
+    .ctrl label span { color: var(--yellow); font-family: monospace; }
+    input[type=range] { width: 100%; accent-color: var(--green); cursor: pointer; }
+    #info { color: var(--dim); font-size: 11px; line-height: 1.6; }
+    code { background: #222; padding: 1px 5px; border-radius: 2px; }
+    #freq-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); padding: 0 1px; margin-top: -4px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Crack Detector Tuner</h1>
+    <div id="status">Disconnected</div>
+    <button id="btn-connect">Connect Board</button>
+    <button id="btn-mute" disabled>Mute Audio</button>
+    <span id="frame-count" style="font-size:12px;color:var(--dim)">0 frames</span>
+  </header>
+
+  <div id="crack-flash">—</div>
+  <canvas id="spectro" height="180"></canvas>
+  <div id="freq-labels"><span>0 Hz</span><span>2 kHz</span><span>4 kHz</span><span>6 kHz</span><span>8 kHz</span></div>
+  <canvas id="fft-bar" height="72"></canvas>
+
+  <div class="controls">
+    <div class="ctrl">
+      <label>Low freq <span id="lo-val">6000</span> Hz</label>
+      <input type="range" id="lo" min="0" max="8000" step="62.5" value="6000">
+    </div>
+    <div class="ctrl">
+      <label>High freq <span id="hi-val">8000</span> Hz</label>
+      <input type="range" id="hi" min="0" max="8000" step="62.5" value="8000">
+    </div>
+    <div class="ctrl">
+      <label>Threshold <span id="thresh-val">600,000</span></label>
+      <input type="range" id="thresh-log" min="3.5" max="7.5" step="0.02" value="5.778">
+    </div>
+  </div>
+
+  <div id="info">
+    Requires Chrome / Edge &mdash; Web Serial API.<br>
+    Serve locally: <code>cd tools &amp;&amp; npx serve .</code> then open <code>http://localhost:3000/crack-tuner.html</code><br>
+    Spectrogram: frequency on X axis (0–8 kHz), time scrolls upward. Yellow band = detection range. Red bar = threshold exceeded.
+  </div>
+
+  <script>
+  (() => {
+    const SAMPLES = 256;
+    const SAMPLE_RATE = 16000;
+    const FRAME_BYTES = 2 + SAMPLES * 2; // 0xAA 0x55 + 256×int16
+
+    let loFreq = 6000, hiFreq = 8000, threshold = 600000;
+    let frameCount = 0, muted = false;
+    let audioCtx = null, workletNode = null;
+    let activePort = null, activeReader = null;
+
+    // --- Elements ---
+    const statusEl     = document.getElementById('status');
+    const connectBtn   = document.getElementById('btn-connect');
+    const muteBtn      = document.getElementById('btn-mute');
+    const frameCountEl = document.getElementById('frame-count');
+    const crackFlash   = document.getElementById('crack-flash');
+    const spectroCanvas= document.getElementById('spectro');
+    const fftCanvas    = document.getElementById('fft-bar');
+
+    // --- Sliders ---
+    const loSlider     = document.getElementById('lo');
+    const hiSlider     = document.getElementById('hi');
+    const threshSlider = document.getElementById('thresh-log');
+
+    loSlider.addEventListener('input', () => {
+      loFreq = +loSlider.value;
+      document.getElementById('lo-val').textContent = loFreq;
+    });
+    hiSlider.addEventListener('input', () => {
+      hiFreq = +hiSlider.value;
+      document.getElementById('hi-val').textContent = hiFreq;
+    });
+    threshSlider.addEventListener('input', () => {
+      threshold = Math.round(Math.pow(10, +threshSlider.value));
+      document.getElementById('thresh-val').textContent = threshold.toLocaleString();
+    });
+    muteBtn.addEventListener('click', () => {
+      muted = !muted;
+      muteBtn.textContent = muted ? 'Unmute Audio' : 'Mute Audio';
+    });
+
+    // --- FFT (radix-2 Cooley-Tukey, in-place) ---
+    function fft(re, im) {
+      const N = re.length;
+      for (let i = 1, j = 0; i < N; i++) {
+        let bit = N >> 1;
+        for (; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) {
+          let t = re[i]; re[i] = re[j]; re[j] = t;
+          t = im[i]; im[i] = im[j]; im[j] = t;
+        }
+      }
+      for (let len = 2; len <= N; len <<= 1) {
+        const ang = -2 * Math.PI / len;
+        const wr = Math.cos(ang), wi = Math.sin(ang);
+        for (let i = 0; i < N; i += len) {
+          let cr = 1, ci = 0;
+          for (let j = 0; j < (len >> 1); j++) {
+            const ur = re[i+j], ui = im[i+j];
+            const vr = re[i+j+(len>>1)] * cr - im[i+j+(len>>1)] * ci;
+            const vi = re[i+j+(len>>1)] * ci + im[i+j+(len>>1)] * cr;
+            re[i+j] = ur + vr;   im[i+j] = ui + vi;
+            re[i+j+(len>>1)] = ur - vr; im[i+j+(len>>1)] = ui - vi;
+            const nc = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nc;
+          }
+        }
+      }
+    }
+
+    function hannWindow(re) {
+      const N = re.length;
+      for (let i = 0; i < N; i++) re[i] *= 0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1)));
+    }
+
+    // --- Canvas setup ---
+    // Spectrogram: frequency on X axis, time scrolls upward.
+    // Each new frame is drawn as a horizontal row at the bottom; image shifts up.
+    let spectroImgData = null;
+
+    function ensureCanvas() {
+      const W = spectroCanvas.clientWidth || 900;
+      if (spectroCanvas.width !== W) {
+        spectroCanvas.width = W;
+        fftCanvas.width = W;
+        spectroImgData = null;
+      }
+    }
+    window.addEventListener('resize', ensureCanvas);
+    ensureCanvas();
+
+    // --- Draw one frame ---
+    function drawFrame(mags) {
+      ensureCanvas();
+      const NBINS = SAMPLES >> 1; // 128, covering 0–8 kHz
+      const sw = spectroCanvas.width, sh = spectroCanvas.height;
+      const ctx = spectroCanvas.getContext('2d');
+
+      if (!spectroImgData || spectroImgData.width !== sw || spectroImgData.height !== sh) {
+        spectroImgData = ctx.createImageData(sw, sh);
+        for (let i = 3; i < spectroImgData.data.length; i += 4) spectroImgData.data[i] = 255;
+      }
+
+      // Scroll image up by 1 row
+      const d = spectroImgData.data;
+      const rowBytes = sw * 4;
+      d.copyWithin(0, rowBytes);
+
+      // Draw new bottom row (frequency on X axis)
+      const rowStart = (sh - 1) * rowBytes;
+      for (let bin = 0; bin < NBINS; bin++) {
+        const freq = bin * SAMPLE_RATE / SAMPLES;
+        const inBand = freq >= loFreq && freq <= hiFreq;
+        const mag = mags[bin];
+        // Log-scale intensity relative to threshold
+        const t = Math.min(1, Math.log1p(mag / 5000) / Math.log1p(threshold / 5000));
+        const x = Math.floor(bin * sw / NBINS);
+        const xEnd = Math.floor((bin + 1) * sw / NBINS);
+        for (let px = x; px < xEnd; px++) {
+          const idx = rowStart + px * 4;
+          if (inBand) {
+            d[idx]   = Math.floor(t * 255);
+            d[idx+1] = Math.floor((1 - t * 0.8) * 180);
+            d[idx+2] = 0;
+          } else {
+            d[idx]   = 0;
+            d[idx+1] = Math.floor(t * 210);
+            d[idx+2] = Math.floor(t * 120);
+          }
+        }
+      }
+      ctx.putImageData(spectroImgData, 0, 0);
+
+      // --- FFT bar chart ---
+      const fc = fftCanvas.getContext('2d');
+      const fw = fftCanvas.width, fh = fftCanvas.height;
+      fc.fillStyle = '#0e0e0e';
+      fc.fillRect(0, 0, fw, fh);
+      const barW = fw / NBINS;
+      for (let bin = 0; bin < NBINS; bin++) {
+        const freq = bin * SAMPLE_RATE / SAMPLES;
+        const inBand = freq >= loFreq && freq <= hiFreq;
+        const mag = mags[bin];
+        const hPx = Math.min(fh, fh * Math.log1p(mag) / Math.log1p(threshold * 4));
+        fc.fillStyle = (mag > threshold && inBand) ? '#f44336'
+                     : inBand ? '#ffeb3b'
+                     : '#4caf50';
+        fc.fillRect(bin * barW, fh - hPx, Math.max(1, barW - 0.5), hPx);
+      }
+      // Threshold line
+      const threshPx = fh * Math.log1p(threshold) / Math.log1p(threshold * 4);
+      fc.strokeStyle = '#ff5722';
+      fc.setLineDash([3, 3]);
+      fc.beginPath(); fc.moveTo(0, fh - threshPx); fc.lineTo(fw, fh - threshPx); fc.stroke();
+      fc.setLineDash([]);
+    }
+
+    // --- Crack flash ---
+    let crackTimer = null;
+    function flashCrack() {
+      crackFlash.textContent = 'CRACK DETECTED';
+      crackFlash.classList.add('active');
+      clearTimeout(crackTimer);
+      crackTimer = setTimeout(() => {
+        crackFlash.textContent = '—';
+        crackFlash.classList.remove('active');
+      }, 600);
+    }
+
+    // --- Process decoded frame ---
+    function processFrame(int16) {
+      // Scale * 4 to match firmware: raw>>14 = (raw>>16)*4 = int16*4
+      const re = new Float32Array(SAMPLES);
+      const im = new Float32Array(SAMPLES);
+      for (let i = 0; i < SAMPLES; i++) re[i] = int16[i] * 4;
+
+      // Audio: feed normalized samples to worklet
+      if (!muted && workletNode) {
+        const audio = new Float32Array(SAMPLES);
+        for (let i = 0; i < SAMPLES; i++) audio[i] = int16[i] / 32768;
+        workletNode.port.postMessage(audio);
+      }
+
+      hannWindow(re);
+      fft(re, im);
+
+      const mags = new Float32Array(SAMPLES >> 1);
+      for (let i = 0; i < mags.length; i++) mags[i] = Math.sqrt(re[i]*re[i] + im[i]*im[i]);
+
+      // Crack detection — matches firmware logic
+      for (let i = 2; i <= SAMPLES >> 1; i++) {
+        const freq = i * SAMPLE_RATE / SAMPLES;
+        if (freq >= loFreq && freq <= hiFreq && mags[i] > threshold) {
+          flashCrack();
+          break;
+        }
+      }
+
+      drawFrame(mags);
+      frameCount++;
+      frameCountEl.textContent = `${frameCount} frames`;
+    }
+
+    // --- Serial framing ---
+    let serialBuf = new Uint8Array(0);
+
+    function consumeFrames() {
+      while (serialBuf.length >= FRAME_BYTES) {
+        // Find 0xAA 0x55 sync header
+        let sync = -1;
+        for (let i = 0; i <= serialBuf.length - FRAME_BYTES; i++) {
+          if (serialBuf[i] === 0xAA && serialBuf[i+1] === 0x55) { sync = i; break; }
+        }
+        if (sync === -1) { serialBuf = serialBuf.slice(serialBuf.length - 1); break; }
+        if (sync > 0) { serialBuf = serialBuf.slice(sync); continue; }
+
+        // Full frame at offset 0
+        const pcmBytes = serialBuf.slice(2, FRAME_BYTES);
+        serialBuf = serialBuf.slice(FRAME_BYTES);
+        // Int16Array from a slice() is always offset-0, so no alignment issue
+        processFrame(new Int16Array(pcmBytes.buffer));
+      }
+    }
+
+    function appendBytes(chunk) {
+      const merged = new Uint8Array(serialBuf.length + chunk.length);
+      merged.set(serialBuf);
+      merged.set(chunk, serialBuf.length);
+      serialBuf = merged;
+      consumeFrames();
+    }
+
+    // --- AudioWorklet (inlined as blob) ---
+    const WORKLET_SRC = `
+class PCMPlayer extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this._q = [];
+    this._head = null;
+    this._pos = 0;
+    this.port.onmessage = ({ data }) => { if (this._q.length < 16) this._q.push(data); };
+  }
+  process(_, outputs) {
+    const ch = outputs[0][0];
+    let i = 0;
+    while (i < ch.length) {
+      if (!this._head || this._pos >= this._head.length) {
+        if (!this._q.length) break;
+        this._head = this._q.shift(); this._pos = 0;
+      }
+      ch[i++] = this._head[this._pos++];
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-player', PCMPlayer);
+`;
+
+    async function initAudio() {
+      audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+      const blob = new Blob([WORKLET_SRC], { type: 'application/javascript' });
+      await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
+      workletNode = new AudioWorkletNode(audioCtx, 'pcm-player');
+      workletNode.connect(audioCtx.destination);
+    }
+
+    // --- Connect / Disconnect ---
+    connectBtn.addEventListener('click', async () => {
+      // Disconnect if active
+      if (activeReader) {
+        try { await activeReader.cancel(); } catch (_) {}
+        return;
+      }
+
+      try {
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 921600 });
+        activePort = port;
+        statusEl.textContent = 'Connected';
+        statusEl.className = 'connected';
+        connectBtn.textContent = 'Disconnect';
+        muteBtn.disabled = false;
+        frameCount = 0;
+        serialBuf = new Uint8Array(0);
+
+        await initAudio();
+
+        // Tell board to enter monitor mode
+        const writer = port.writable.getWriter();
+        await writer.write(new Uint8Array([0x6D])); // 'm'
+        writer.releaseLock();
+
+        const reader = port.readable.getReader();
+        activeReader = reader;
+
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            appendBytes(value);
+          }
+        } catch (_) {
+          // cancelled — normal disconnect path
+        } finally {
+          reader.releaseLock();
+          activeReader = null;
+          // Tell board to exit monitor mode
+          try {
+            const w = port.writable.getWriter();
+            await w.write(new Uint8Array([0x78])); // 'x'
+            w.releaseLock();
+          } catch (_) {}
+          await port.close();
+          activePort = null;
+          statusEl.textContent = 'Disconnected';
+          statusEl.className = '';
+          connectBtn.textContent = 'Connect Board';
+          muteBtn.disabled = true;
+        }
+      } catch (e) {
+        if (e.name !== 'NotFoundError') {
+          statusEl.textContent = 'Error';
+          statusEl.className = 'error';
+          console.error(e);
+        }
+        connectBtn.textContent = 'Connect Board';
+        activeReader = null;
+      }
+    });
+
+    if (!('serial' in navigator)) {
+      statusEl.textContent = 'Web Serial not supported';
+      statusEl.className = 'error';
+      connectBtn.disabled = true;
+      document.getElementById('info').innerHTML +=
+        '<br><strong style="color:var(--red)">Web Serial requires Chrome or Edge.</strong>';
+    }
+  })();
+  </script>
+</body>
+</html>
