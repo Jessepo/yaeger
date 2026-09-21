@@ -40,6 +40,10 @@
     #info { color: var(--dim); font-size: 11px; line-height: 1.6; }
     code { background: #222; padding: 1px 5px; border-radius: 2px; }
     #freq-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); padding: 0 1px; margin-top: -4px; margin-bottom: 8px; }
+      #serial-monitor { margin-top: 10px; padding: 8px; background: #0b0b0b; border: 1px solid var(--border); border-radius: 3px; color: var(--dim); font: 11px/1.5 monospace; white-space: pre-wrap; }
+    .recording-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+    .recording-controls select { padding: 5px 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 3px; }
+    #record-status { color: var(--dim); font-size: 12px; }
   </style>
 </head>
 <body>
@@ -55,6 +59,16 @@
   <canvas id="spectro" height="180"></canvas>
   <div id="freq-labels"><span>0 Hz</span><span>2 kHz</span><span>4 kHz</span><span>6 kHz</span><span>8 kHz</span></div>
   <canvas id="fft-bar" height="72"></canvas>
+  <div class="recording-controls">
+    <select id="record-seconds" aria-label="Recording duration">
+      <option value="5">5 seconds</option>
+      <option value="10" selected>10 seconds</option>
+    </select>
+    <button id="btn-record">Record</button>
+    <button id="btn-replay" disabled>Replay</button>
+    <button id="btn-clear-recording" disabled>Clear Recording</button>
+    <span id="record-status">No recording</span>
+  </div>
 
   <div class="controls">
     <div class="ctrl">
@@ -76,6 +90,7 @@
     Serve locally: <code>cd tools &amp;&amp; npx serve .</code> then open <code>http://localhost:3000/crack-tuner.html</code><br>
     Spectrogram: frequency on X axis (0–8 kHz), time scrolls upward. Yellow band = detection range. Red bar = threshold exceeded.
   </div>
+    <pre id="serial-monitor">Serial monitor: disconnected</pre>
 
   <script>
   (() => {
@@ -85,6 +100,11 @@
 
     let loFreq = 6000, hiFreq = 8000, threshold = 600000;
     let frameCount = 0, muted = false;
+      let serialBytes = 0, serialChunks = 0, syncCount = 0;
+      const monitorLines = [];
+    let recordedFrames = [];
+    let recording = false;
+    let replayTimer = null;
     let audioCtx = null, workletNode = null;
     let activePort = null, activeReader = null;
 
@@ -96,6 +116,22 @@
     const crackFlash   = document.getElementById('crack-flash');
     const spectroCanvas= document.getElementById('spectro');
     const fftCanvas    = document.getElementById('fft-bar');
+      const monitorEl    = document.getElementById('serial-monitor');
+    const recordSeconds = document.getElementById('record-seconds');
+    const recordBtn    = document.getElementById('btn-record');
+    const replayBtn    = document.getElementById('btn-replay');
+    const clearRecordingBtn = document.getElementById('btn-clear-recording');
+    const recordStatus = document.getElementById('record-status');
+
+      function updateMonitor(message) {
+        monitorLines.push(message);
+        if (monitorLines.length > 8) monitorLines.shift();
+        monitorEl.textContent = monitorLines.join('\n');
+      }
+
+      function hexPreview(bytes) {
+        return Array.from(bytes.slice(0, 24), (byte) => byte.toString(16).padStart(2, '0')).join(' ');
+      }
 
     // --- Sliders ---
     const loSlider     = document.getElementById('lo');
@@ -248,7 +284,15 @@
     }
 
     // --- Process decoded frame ---
-    function processFrame(int16) {
+    function processFrame(int16, saveForRecording = true) {
+      if (recording && saveForRecording) {
+        recordedFrames.push(new Int16Array(int16));
+        recordStatus.textContent = `Recording ${recordedFrames.length} frames`;
+        if (recordedFrames.length >= Math.ceil(+recordSeconds.value * SAMPLE_RATE / SAMPLES)) {
+          stopRecording();
+        }
+      }
+
       // Scale * 4 to match firmware: raw>>14 = (raw>>16)*4 = int16*4
       const re = new Float32Array(SAMPLES);
       const im = new Float32Array(SAMPLES);
@@ -281,6 +325,61 @@
       frameCountEl.textContent = `${frameCount} frames`;
     }
 
+    function stopRecording() {
+      recording = false;
+      recordBtn.textContent = 'Record';
+      recordSeconds.disabled = false;
+      replayBtn.disabled = recordedFrames.length === 0;
+      clearRecordingBtn.disabled = recordedFrames.length === 0;
+      recordStatus.textContent = recordedFrames.length
+        ? `Recorded ${(recordedFrames.length * SAMPLES / SAMPLE_RATE).toFixed(1)} seconds`
+        : 'No recording';
+    }
+
+    function startRecording() {
+      if (replayTimer) stopReplay();
+      recordedFrames = [];
+      recording = true;
+      recordBtn.textContent = 'Stop Recording';
+      recordSeconds.disabled = true;
+      replayBtn.disabled = true;
+      clearRecordingBtn.disabled = true;
+      recordStatus.textContent = 'Recording 0 frames';
+    }
+
+    function stopReplay() {
+      if (replayTimer) clearInterval(replayTimer);
+      replayTimer = null;
+      recordBtn.disabled = false;
+      recordSeconds.disabled = false;
+      recordStatus.textContent = recordedFrames.length
+        ? `Recorded ${(recordedFrames.length * SAMPLES / SAMPLE_RATE).toFixed(1)} seconds`
+        : 'No recording';
+    }
+
+    function replayRecording() {
+      if (!recordedFrames.length) return;
+      if (replayTimer) stopReplay();
+      let frameIndex = 0;
+      recordBtn.disabled = true;
+      recordSeconds.disabled = true;
+      recordStatus.textContent = `Replaying ${recordedFrames.length} frames`;
+      replayTimer = setInterval(() => {
+        processFrame(recordedFrames[frameIndex++], false);
+        if (frameIndex >= recordedFrames.length) stopReplay();
+      }, (SAMPLES / SAMPLE_RATE) * 1000);
+    }
+
+    recordBtn.addEventListener('click', () => recording ? stopRecording() : startRecording());
+    replayBtn.addEventListener('click', replayRecording);
+    clearRecordingBtn.addEventListener('click', () => {
+      if (replayTimer) stopReplay();
+      recordedFrames = [];
+      replayBtn.disabled = true;
+      clearRecordingBtn.disabled = true;
+      recordStatus.textContent = 'No recording';
+    });
+
     // --- Serial framing ---
     let serialBuf = new Uint8Array(0);
 
@@ -291,10 +390,14 @@
         for (let i = 0; i <= serialBuf.length - FRAME_BYTES; i++) {
           if (serialBuf[i] === 0xAA && serialBuf[i+1] === 0x55) { sync = i; break; }
         }
-        if (sync === -1) { serialBuf = serialBuf.slice(serialBuf.length - 1); break; }
+        if (sync === -1) {
+          serialBuf = serialBuf.slice(serialBuf.length - 1);
+          break;
+        }
         if (sync > 0) { serialBuf = serialBuf.slice(sync); continue; }
 
         // Full frame at offset 0
+        syncCount++;
         const pcmBytes = serialBuf.slice(2, FRAME_BYTES);
         serialBuf = serialBuf.slice(FRAME_BYTES);
         // Int16Array from a slice() is always offset-0, so no alignment issue
@@ -303,11 +406,14 @@
     }
 
     function appendBytes(chunk) {
+        serialBytes += chunk.length;
+        serialChunks++;
       const merged = new Uint8Array(serialBuf.length + chunk.length);
       merged.set(serialBuf);
       merged.set(chunk, serialBuf.length);
       serialBuf = merged;
       consumeFrames();
+        updateMonitor(`bytes=${serialBytes} chunks=${serialChunks} headers=${syncCount} frames=${frameCount} buffered=${serialBuf.length}\nlast: ${hexPreview(chunk)}`);
     }
 
     // --- AudioWorklet (inlined as blob) ---
@@ -354,13 +460,18 @@ registerProcessor('pcm-player', PCMPlayer);
 
       try {
         const port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 921600 });
+        await port.open({ baudRate: 115200 });
         activePort = port;
         statusEl.textContent = 'Connected';
         statusEl.className = 'connected';
         connectBtn.textContent = 'Disconnect';
         muteBtn.disabled = false;
         frameCount = 0;
+          serialBytes = 0;
+          serialChunks = 0;
+          syncCount = 0;
+          monitorLines.length = 0;
+          updateMonitor('Connected at 115200 baud; waiting for serial data...');
         serialBuf = new Uint8Array(0);
 
         await initAudio();

@@ -5,9 +5,9 @@
 
 #define SAMPLES 256
 #define SAMPLING_FREQUENCY 16000
-#define CRACK_THRESHOLD 600000
-#define LOCRACKF 6000
-#define HICRACKF 8000
+#define CRACK_THRESHOLD 35000
+#define LOCRACKF 3500
+#define HICRACKF 7500
 
 #define I2S_WS  15
 #define I2S_SCK 14
@@ -19,7 +19,7 @@ ArduinoFFT<float> FFT = ArduinoFFT<float>();
 float vReal[SAMPLES], vImag[SAMPLES];
 Adafruit_NeoPixel pixel(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
 
-static bool monitorMode = false;
+static bool monitorMode = true;
 int crackcount = 0, counttime = 0;
 bool isthis1stcount, isthis2ndcount, isthis3rdcount, newscan = 1;
 unsigned long recordmillis1, recordmillis2, recordmillis3;
@@ -104,14 +104,14 @@ void loop() {
   }
 
   newscan = 1;
-  pixel.setPixelColor(0, pixel.Color(0, 0, 0)); pixel.show();
+  pixel.setPixelColor(0, pixel.Color(0, 50, 0)); pixel.show();
 
   if (isthis1stcount && isthis3rdcount) {
     if ((recordmillis3 - recordmillis1) <= (unsigned long)delaytime && counttime <= 3) {
       // Serial2.printf("CRACK,%d,%lu\n", counttime, recordmillis3 - recordmillis1);
       Serial.printf("[DBG] CRACK sent: count=%d elapsed=%lums\n", counttime, recordmillis3 - recordmillis1);
       pixel.setPixelColor(0, pixel.Color(150, 0, 0)); pixel.show(); delay(500);
-      pixel.setPixelColor(0, pixel.Color(0, 0, 0)); pixel.show();
+      pixel.setPixelColor(0, pixel.Color(0, 50, 0)); pixel.show();
       counttime = 0;
     }
     if ((recordmillis3 - recordmillis1) > (unsigned long)delaytime) {
