@@ -61,6 +61,8 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         d["BT"]  = control->getBeanTemp();
         d["CH3"] = control->getIRObjectTemp();
         d["CH4"] = control->getIRAmbientTemp();
+        d["CH5"] = control->getDHTTemperature();
+        d["RH"]  = control->getDHTHumidity();
         String out;
         serializeJson(resp, out);
         client->text(out);
@@ -180,6 +182,8 @@ void WSRequestHandler::loop() {
   d["Amb"]        = control->getAmbientTemp();
   d["CH3"]        = control->getIRObjectTemp();
   d["CH4"]        = control->getIRAmbientTemp();
+  d["CH5"]        = control->getDHTTemperature();
+  d["RH"]         = control->getDHTHumidity();
   d["BurnerVal"]  = control->getHeater();
   d["FanVal"]     = control->getFan();
   d["wifiStrength"] = WiFi.RSSI();

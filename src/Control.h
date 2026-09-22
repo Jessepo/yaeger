@@ -4,6 +4,7 @@
 #include "pwm.h"
 #include "sensor.h"
 #include <Adafruit_MLX90614.h>
+#include <DHT.h>
 
 class Control {
 private:
@@ -16,7 +17,11 @@ private:
   Sensor _etSensor;
   Sensor _btSensor;
   Adafruit_MLX90614 _ir;
+  DHT _dht;
   bool _irPresent = false;
+  bool _dhtPresent = false;
+  float _dhtTempC = 0.f;
+  float _dhtHumidity = 0.f;
   const uint8_t noUpdateBeforeMs = 20;
   unsigned long lastUpdate = 0;
 
@@ -34,6 +39,8 @@ public:
   float getAmbientTemp() const;
   float getIRObjectTemp() const;
   float getIRAmbientTemp() const;
+  float getDHTTemperature() const;
+  float getDHTHumidity() const;
 
   void allOff();
   void loop();

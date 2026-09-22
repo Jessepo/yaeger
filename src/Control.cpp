@@ -10,7 +10,9 @@ Control::Control(bool fanSsrMode)
     _ssrFanOn(false),
     _heater(HEATER_PIN, HEATER_FREQUENCY, 10, 1),
     _etSensor(MAX1CLK, MAX1CS, MAX1DO, "Exhaust"),
-    _btSensor(MAX2CLK, MAX2CS, MAX2DO, "Bean") {
+    _btSensor(MAX2CLK, MAX2CS, MAX2DO, "Bean"),
+    _ir(),
+    _dht(DHT_PIN, DHT_TYPE) {
   if (_fanSsrMode) {
     pinMode(_fanPin, OUTPUT);
     digitalWrite(_fanPin, LOW);
@@ -20,6 +22,17 @@ Control::Control(bool fanSsrMode)
     log("MLX90614 IR sensor found");
   } else {
     log("MLX90614 IR sensor not found — CH3/CH4 will read 0");
+  }
+
+  _dht.begin();
+  float initialTemp = _dht.readTemperature();
+  _dhtPresent = !isnan(initialTemp);
+  if (_dhtPresent) {
+    _dhtTempC = initialTemp;
+    _dhtHumidity = _dht.readHumidity();
+    log("DHT22 sensor found on GPIO 7");
+  } else {
+    log("DHT22 sensor not detected on GPIO 7 — CH5/RH will read 0");
   }
 }
 
@@ -73,6 +86,16 @@ float Control::getIRAmbientTemp() const {
   return _ir.readAmbientTempC();
 }
 
+float Control::getDHTTemperature() const {
+  if (!_dhtPresent) return 0.f;
+  return _dhtTempC;
+}
+
+float Control::getDHTHumidity() const {
+  if (!_dhtPresent) return 0.f;
+  return _dhtHumidity;
+}
+
 void Control::allOff() {
   _heaterVal = 0.f;
   setFan(0.f);
@@ -85,6 +108,17 @@ void Control::loop() {
 
   _btSensor.takeReading();
   _etSensor.takeReading();
+
+  if (_dhtPresent) {
+    float temp = _dht.readTemperature();
+    if (!isnan(temp)) {
+      _dhtTempC = temp;
+    }
+    float humidity = _dht.readHumidity();
+    if (!isnan(humidity)) {
+      _dhtHumidity = humidity;
+    }
+  }
 
   // Safety: refuse to heat if the fan is not running.
   float out = (getFan() < 1.f) ? 0.f : _heaterVal;

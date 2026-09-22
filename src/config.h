@@ -1,22 +1,3 @@
-#ifdef S3MINI
-
-#define FAN_PIN 21
-
-#define HEATER_PIN 18
-
-// temp sensor pins
-#define MAX1DO 35
-#define MAX1CS 37
-#define MAX1CLK 33
-
-#define MAX2DO 35
-#define MAX2CS 39
-#define MAX2CLK 33
-
-#define DISPLAY_DA 41
-#define DISPLAY_CL 42
-
-#else
 #define ARGB_PIN 4
 
 #define FAN_PIN 8
@@ -37,9 +18,12 @@
 
 #define DISPLAY_DA 41
 #define DISPLAY_CL 42
-#endif
 
 #define DEBUG false
+
+// DHT22 ambient sensor
+#define DHT_PIN 7
+#define DHT_TYPE DHT22
 
 // UART to crack listener board (separate ESP32-S3)
 #define CRACK_RX_PIN 17

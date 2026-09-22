@@ -27,6 +27,7 @@ The firmware does not own profiles or PID loops. Artisan controls burner and fan
 | 4 | ARGB data | WS2812 status LED |
 | 5 | SPI MISO | Shared thermocouple bus |
 | 6 | SPI CLK | Shared thermocouple bus |
+| 7 | DHT22 data | Optional ambient humidity/temperature sensor |
 | 8 | Fan PWM | 20 kHz |
 | 15 | ET CS | MAX31855 exhaust/inlet air thermocouple |
 | 16 | BT CS | MAX31855 bean thermocouple |
@@ -38,8 +39,15 @@ The firmware does not own profiles or PID loops. Artisan controls burner and fan
 | 44 | USB CDC RX | Debug serial |
 | 48 | Onboard NeoPixel | Status indicator |
 
-### S3 Mini alternate pinout
-See `schema/Lolin esp32-S3 mini.pdf` and adjust `src/config.h` accordingly. SPI/I2C pins differ.
+### Optional DHT22 ambient sensor
+GPIO 7 is reserved for an optional DHT22 sensor. Wire it as:
+
+- VCC → 3.3V
+- GND → GND
+- DATA → GPIO 7
+- 10 kΩ pull-up from DATA to 3.3V
+
+The device reports `CH5` (temperature) and `RH` (relative humidity) over the WebSocket status payload.
 
 ---
 
@@ -51,8 +59,10 @@ See `schema/Lolin esp32-S3 mini.pdf` and adjust `src/config.h` accordingly. SPI/
 | CH2 / BT | MAX31855 (GPIO 16 CS) | K-type thermocouple via SPI | Bean temperature |
 | CH3 | MLX90614 (I2C) | IR non-contact | Object (surface) temperature |
 | CH4 | MLX90614 (I2C) | IR non-contact | Ambient temperature |
+| CH5 | DHT22 (GPIO 7) | Digital temp sensor | Optional ambient temperature |
+| RH | DHT22 (GPIO 7) | Digital humidity sensor | Optional relative humidity |
 
-CH1–CH4 map directly to Artisan's WebSocket channel names. CH3 and CH4 require the MLX90614 to be wired (see below). If the sensor is absent, `_irPresent = false` and the firmware returns 0 for CH3/CH4.
+CH1–CH5 and RH map directly to the WebSocket data payload. CH3/CH4 require the MLX90614 to be wired (see below). If the IR sensor is absent, `_irPresent = false` and the firmware returns 0 for CH3/CH4. If the DHT22 is absent, CH5 and RH read 0.
 
 The **BT Source** setting in Device Settings lets you choose which sensor Artisan receives as the bean temperature (BT thermocouple, IR object, or average). Defaults to BT thermocouple.
 

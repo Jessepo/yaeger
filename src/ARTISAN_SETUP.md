@@ -27,10 +27,6 @@ push crack events back to Artisan unprompted.
 | 44   | USB CDC RX | Upload / serial monitor |
 | 48   | NeoPixel | Onboard status pixel (red = booting, green = ready) |
 
-> **S3 Mini alternate pinout** — set `-D S3MINI` in build_flags.
-> HEATER=18, FAN=21, MAX CLK=33, MISO=35, ET_CS=37, BT_CS=39, I2C same.
-> Pick different CRACK_RX/TX pins (e.g. 19/20) since GPIO 18 is HEATER on S3 Mini.
-
 ### Crack listener board (separate ESP32-S3)
 
 | GPIO | Signal | Notes |
