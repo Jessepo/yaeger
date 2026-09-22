@@ -12,6 +12,7 @@ export type YaegerMessage = {
   wifiStrength?: number;
   type?: string;
   fanMode?: string;
+  btSource?: string;
 }
 
 export class YaegerState  {

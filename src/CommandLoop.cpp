@@ -101,6 +101,12 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
               preferences->putString(fanModeKey, fanMode);
             }
           }
+          if (!doc["btSource"].isNull()) {
+            String bts = doc["btSource"].as<const char *>();
+            if (bts == "bt" || bts == "ir" || bts == "avg") {
+              preferences->putString(btSourceKey, bts);
+            }
+          }
           if (!doc["wifiSsid"].isNull() && !doc["wifiPass"].isNull()) {
             preferences->putString(wifiSSIDKey, doc["wifiSsid"].as<const char *>());
             preferences->putString(wifiPassKey, doc["wifiPass"].as<const char *>());
@@ -111,8 +117,9 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         JsonObject root = resp.to<JsonObject>();
         root["id"] = ln_id;
         JsonObject d = root["data"].to<JsonObject>();
-        d["type"]    = "preferences";
-        d["fanMode"] = preferences->getString(fanModeKey, "pwm");
+        d["type"]     = "preferences";
+        d["fanMode"]  = preferences->getString(fanModeKey,  "pwm");
+        d["btSource"] = preferences->getString(btSourceKey, "bt");
         String out;
         serializeJson(resp, out);
         client->text(out);

@@ -2,12 +2,10 @@
 #include "arduinoFFT.h"
 #include <driver/i2s.h>
 #include <Adafruit_NeoPixel.h>
+#include <Preferences.h>
 
 #define SAMPLES 256
 #define SAMPLING_FREQUENCY 16000
-#define CRACK_THRESHOLD 35000
-#define LOCRACKF 3500
-#define HICRACKF 7500
 
 #define I2S_WS  15
 #define I2S_SCK 14
@@ -20,16 +18,44 @@ float vReal[SAMPLES], vImag[SAMPLES];
 Adafruit_NeoPixel pixel(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
 
 static bool monitorMode = true;
+static Preferences crackPrefs;
+static String cmdBuf = "";
+
+// Detection parameters — loaded from NVS on boot, updated via 's,lo,hi,thresh\n' command
+static int loFreq = 3500, hiFreq = 7500, crackThresh = 35000;
+
 int crackcount = 0, counttime = 0;
 bool isthis1stcount, isthis2ndcount, isthis3rdcount, newscan = 1;
 unsigned long recordmillis1, recordmillis2, recordmillis3;
 int delaytime = 3000;
 
+void processCmd(const String &cmd) {
+  if (cmd == "m") { monitorMode = true; return; }
+  if (cmd == "x") { monitorMode = false; return; }
+  if (cmd.startsWith("s,")) {
+    int c1 = cmd.indexOf(',', 2);
+    int c2 = cmd.indexOf(',', c1 + 1);
+    if (c1 > 0 && c2 > 0) {
+      loFreq    = cmd.substring(2, c1).toInt();
+      hiFreq    = cmd.substring(c1 + 1, c2).toInt();
+      crackThresh = cmd.substring(c2 + 1).toInt();
+      crackPrefs.putInt("loFreq",    loFreq);
+      crackPrefs.putInt("hiFreq",    hiFreq);
+      crackPrefs.putInt("threshold", crackThresh);
+    }
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(100);
   Serial.println("[DBG] Serial started");
-  
+
+  crackPrefs.begin("crack", false);
+  loFreq     = crackPrefs.getInt("loFreq",    3500);
+  hiFreq     = crackPrefs.getInt("hiFreq",    7500);
+  crackThresh = crackPrefs.getInt("threshold", 35000);
+
   // Serial2.begin(115200, SERIAL_8N1, 16, 17);
 
   pixel.begin();
@@ -56,15 +82,20 @@ void setup() {
   Serial.println("[DBG] I2S driver installed");
   i2s_set_pin(I2S_NUM_0, &pin_config);
   Serial.println("[DBG] I2S pins set");
-
+  Serial.printf("[DBG] Params: lo=%d hi=%d thresh=%d\n", loFreq, hiFreq, crackThresh);
   Serial.println("[DBG] Ready");
 }
 
 void loop() {
-  if (Serial.available()) {
+  while (Serial.available()) {
     char c = (char)Serial.read();
-    if (c == 'm') monitorMode = true;
-    else if (c == 'x') monitorMode = false;
+    if (c == '\n') {
+      cmdBuf.trim();
+      if (cmdBuf.length() > 0) processCmd(cmdBuf);
+      cmdBuf = "";
+    } else {
+      cmdBuf += c;
+    }
   }
 
   int32_t raw[SAMPLES];
@@ -91,7 +122,7 @@ void loop() {
 
   for (int i = 2; i <= SAMPLES / 2; i++) {
     float freq = i * 1.0 * SAMPLING_FREQUENCY / SAMPLES;
-    if (freq >= LOCRACKF && freq <= HICRACKF && vReal[i] > CRACK_THRESHOLD) {
+    if (freq >= loFreq && freq <= hiFreq && vReal[i] > crackThresh) {
       Serial.printf("[DBG] freq=%.0f mag=%.0f\n", freq, vReal[i]);
       if (crackcount <= 4) crackcount++; else crackcount = 0;
 

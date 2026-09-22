@@ -1,154 +1,179 @@
 # Yaeger
 
-![yaeger logo](./assets/Jaegerv5.png)
+ESP32-S3 coffee roaster controller. Artisan drives the roast via WebSocket; the firmware handles hardware I/O, safety, and first-crack detection.
 
-## Yet another embedded gourmet experience roaster
+## Architecture
 
-### or something like that
-
-## The gist
-
-Yaeger is an embedded computer that takes control of your "coffee roaster". It reads from up to two
-thermocouples, drives a fan via PWM (or a digital SSR), and modulates a heating element through an
-AC SSR. The firmware ships with its own touchscreen-friendly web dashboard served straight off the
-device, and also speaks the Artisan-Scope WebSocket protocol for users who prefer that workflow.
-
-This is a heavily modified fork of the original Yaeger project.
-
-### Command and control
-
-
-Upon first launch, Yaeger will set up its own access point. You can then configure the preferred wifi for Yaeger to
-connect to from the Web UI (see below). After setting up the preffered Wifi, Yaeger will try to connect to it on every
-boot. If it can't connect to the preffered Wifi, Yaeger will fallback to its own access point (so you can set up Wifi
-again).
-#### Artisan Scope
-
-Load the config, found in `./artisan-settings.aset` into Artisan-Scope, change the server ip to match yours and click the on button.
-
-#### Web interface
-
-Yaeger ships with a built-in single-page dashboard served from the device. Point your browser at `yaeger.local` when on
-your home wifi, or `192.168.4.1` if Yaeger created its own access point. No app to install — the firmware serves the UI
-from LittleFS.
-
-#### Using Yaeger on the go
-
-If Yaeger can't connect to your preferred Wifi, it will create its own access point. Perfect for when out and about :grin:
-
-### Building and flashing
-
-A build script has been provided by [@matthew73210](https://github.com/matthew73210), so to get up and running on the
-ESP, just run `./build_and_flash.sh`. Make sure to read the comments in the script. But also in the platformio.ini and choose the right board
-
-## Latest features
-
-### Firmware-owned PID and profile execution
-
-The on-device PID loop owns the roast once it starts. The webapp pushes the profile to firmware at "Start Roast" and
-the ESP32 then autonomously interpolates the setpoint and drives the heater + fan. The webapp becomes a live viewer.
-
-The big upside: **WebSocket disconnects no longer break the roast**. The roaster keeps following its profile, the
-dashboard auto-reconnects with exponential backoff, and the chart back-fills from the firmware's 1 Hz history buffer
-on reconnect.
-
-You'll still need to find your own PID values for your hardware — kp/ki/kd are saved in NVS preferences.
-
-### Profile editor in the dashboard
-
-A full-width strip under the chart lets you click any profile point to select it, then nudge time / temperature / fan
-with ±30 s, ±1 °C, ±5 % buttons. Edits push to firmware in real time so they take effect mid-roast within ~100 ms.
-
-Eight profile slots can be saved to the device's LittleFS partition for later. Five roast slots too — saves are
-1 Hz downsampled so a 15-minute roast lands at ~150-300 KB on flash, while the local "Download JSON" button still
-gives you the full 10 Hz capture. There's also a one-click "Download PNG" for a chart snapshot.
-
-### End-of-roast workflow
-
-* **Start Roast** auto-records the **Charge** event so the chart's `charge` marker lands at t=0.
-* **End Roast** records a **Drop** event, asks the firmware to stop following, and enters cool-down (Manual mode,
-  heater 0, fan to the configured Cooldown Fan %).
-* **Auto-drop**: while in PID mode following a profile, the third Controls slider becomes a **Target BT** slider
-  (default 230 °C). When the live BT crosses that value, the same drop-→-cool-down path fires automatically.
-* **Save modal**: once BT drops below 50 °C the dashboard opens a modal with a roast-name input and one button that
-  saves JSON to device + downloads JSON locally + downloads a PNG of the chart. Then All Off.
-* **Clear Reset** in the top bar wipes the chart, event markers, modal state, and asks firmware to end any
-  in-progress roast — back to a fresh state.
-* Each event (charge / dry-end / 1st & 2nd crack / drop) drops a colored dot on the BT line in the chart, labeled
-  with the BT at that moment. Buttons in the Events panel are color-coded along the bean-roast progression too
-  (green raw → tan → cinnamon → browns → near-black drop).
-
-### Reliability & safety
-
-* **Auto-reconnect** with exponential backoff. Commands issued while offline get queued and flushed in order on
-  reconnect. **All Off** always jumps to the front of the queue.
-* **Safety watchdog**: if the WebSocket has been silent for more than 5 minutes _and_ BT is over 230 °C while a roast
-  is following a profile, firmware fires All Off automatically.
-
-### Fan modes (PWM or SSR)
-
-Toggle between PWM dimmer (continuous 0-100%) and a digital SSR (on/off, threshold > 0). Selectable in the PID Settings
-panel, applied on next boot. Same wiring pin either way.
-
-### Roast profile formats
-
-Two JSON shapes are accepted by the loader; both round-trip through the in-app editor.
-
-Phased format (heater + fan timelines, easy to author):
-
-```json
-{
-  "name": "second profile",
-  "heaterPhases": [
-    { "time": 0,   "temperature": 50  },
-    { "time": 60,  "temperature": 120 },
-    { "time": 780, "temperature": 224 }
-  ],
-  "fanPhases": [
-    { "time": 0,   "fanSpeed": 95 },
-    { "time": 420, "fanSpeed": 50 }
-  ]
-}
+```
+Artisan (PC) ──WebSocket──► ESP32-S3 main board ──SPI──► MAX31855 (ET, BT thermocouples)
+                                                  ──I2C──► MLX90614 IR probe + SSD1306 OLED
+                                                  ──PWM──► Heater SSR + Fan
+                                                  ──UART──► Crack listener board
+Crack listener board ────────────────────────────────────────────────────────────────────┘
+  ESP32-S3 + INMP441 MEMS mic
+  FFT-based first-crack detection → sends CRACK event over UART
+  Main board relays → Artisan push event {"message":"FCs"}
 ```
 
-Legacy "steps" format (duration-based segments):
+The firmware does not own profiles or PID loops. Artisan controls burner and fan via WebSocket sliders. The board enforces one safety rule: heater output is zero whenever the fan is off.
 
-```json
-{
-  "steps": [
-    { "duration": 10,  "setpoint": 40,  "interpolation": "linear" },
-    { "duration": 360, "setpoint": 217, "interpolation": "ease-out" }
-  ]
-}
+---
+
+## Main Board Hardware Pinout (ESP32-S3 DevKitC-1 N16R8)
+
+| GPIO | Function | Notes |
+|------|----------|-------|
+| 3 | Heater PWM | 50 Hz SSR signal |
+| 4 | ARGB data | WS2812 status LED |
+| 5 | SPI MISO | Shared thermocouple bus |
+| 6 | SPI CLK | Shared thermocouple bus |
+| 8 | Fan PWM | 20 kHz |
+| 15 | ET CS | MAX31855 exhaust/inlet air thermocouple |
+| 16 | BT CS | MAX31855 bean thermocouple |
+| 17 | CRACK RX (Serial2) | Receives UART from crack listener |
+| 18 | CRACK TX (Serial2) | Not currently used |
+| 41 | I2C SDA | MLX90614 IR probe + SSD1306 OLED |
+| 42 | I2C SCL | MLX90614 IR probe + SSD1306 OLED |
+| 43 | USB CDC TX | Debug serial |
+| 44 | USB CDC RX | Debug serial |
+| 48 | Onboard NeoPixel | Status indicator |
+
+### S3 Mini alternate pinout
+See `schema/Lolin esp32-S3 mini.pdf` and adjust `src/config.h` accordingly. SPI/I2C pins differ.
+
+---
+
+## Temperature Channels
+
+| Channel | Sensor | Type | Notes |
+|---------|--------|------|-------|
+| CH1 / ET | MAX31855 (GPIO 15 CS) | K-type thermocouple via SPI | Exhaust / inlet air temperature |
+| CH2 / BT | MAX31855 (GPIO 16 CS) | K-type thermocouple via SPI | Bean temperature |
+| CH3 | MLX90614 (I2C) | IR non-contact | Object (surface) temperature |
+| CH4 | MLX90614 (I2C) | IR non-contact | Ambient temperature |
+
+CH1–CH4 map directly to Artisan's WebSocket channel names. CH3 and CH4 require the MLX90614 to be wired (see below). If the sensor is absent, `_irPresent = false` and the firmware returns 0 for CH3/CH4.
+
+The **BT Source** setting in Device Settings lets you choose which sensor Artisan receives as the bean temperature (BT thermocouple, IR object, or average). Defaults to BT thermocouple.
+
+---
+
+## MLX90614 IR Probe Wiring
+
+| MLX90614 pin | ESP32-S3 GPIO |
+|---|---|
+| VCC | 3.3 V |
+| GND | GND |
+| SDA | GPIO 41 |
+| SCL | GPIO 42 |
+
+The SSD1306 OLED shares the same I2C bus (address 0x3C). The MLX90614 is at address 0x5A.
+
+---
+
+## OLED Display (SSD1306)
+
+128×64 I2C OLED on GPIO 41/42 (shared with MLX90614). Shows ET, BT, fan, and heater values. Address: 0x3C.
+
+---
+
+## Crack Listener Board
+
+A separate ESP32-S3 with an INMP441 MEMS microphone. Listens continuously, runs an FFT on 256-sample windows at 16 kHz, and sends a UART message when it detects the acoustic signature of first crack.
+
+### Crack listener pinout
+
+| GPIO | Function |
+|------|----------|
+| 13 | I2S SD (INMP441 data) |
+| 14 | I2S SCK (INMP441 clock) |
+| 15 | I2S WS (INMP441 word select) |
+| 16 | UART RX (from main board — not currently used) |
+| 17 | UART TX → main board GPIO 17 |
+| 48 | NeoPixel status LED |
+
+### Detection parameters (stored in NVS)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `loFreq` | 3500 Hz | Lower bound of crack frequency band |
+| `hiFreq` | 7500 Hz | Upper bound of crack frequency band |
+| `threshold` | 35000 | FFT magnitude threshold for detection |
+
+**Note:** `monitorMode` in `cracks/src/main.cpp` is currently set to `true` (starts in audio-streaming mode on boot). Change to `false` for production use so crack detection runs automatically without the browser UI connected.
+
+**Note:** `Serial2.printf("CRACK,...")` in `cracks/src/main.cpp` is commented out. Uncomment it for the UART trigger to reach the main board.
+
+### Tuning the crack detector
+
+Open the **Crack Tuner** panel in the yaeger.local dashboard (requires Chrome/Edge with Web Serial enabled for http://yaeger.local — see below). Connect to the crack listener board via USB. The panel shows a live spectrogram and FFT with adjustable frequency band and threshold sliders. Click **Save to Board** to persist new values to NVS.
+
+To enable Web Serial on yaeger.local:
+1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`
+2. Add `http://yaeger.local` to the list
+3. Relaunch Chrome
+
+Standalone alternative: `cd tools && npx serve .` then open `http://localhost:3000/crack-tuner.html`.
+
+---
+
+## Artisan WebSocket Setup
+
+**Config → Device → WebSocket**
+
+| Field | Value |
+|-------|-------|
+| Host | `yaeger.local` |
+| Port | `80` |
+| Path | `/ws` |
+| Protocol | - |
+| Node names | ET, BT, CH3, CH4 |
+
+**Config → Device → ET/BT Channels**: ET=CH1, BT=CH2
+
+**Slider actions** (Config → Events → Sliders):
+
+| Slider | Action |
+|--------|--------|
+| Burner | `{"id":1,"command":"setBurner","value":{})` |
+| Fan | `{"id":1,"command":"setFan","value":{}}` |
+
+**Push events** (Config → Device → WebSocket → Enable push events):
+- `FCs` → First crack start event
+
+---
+
+## Building
+
+### Main board firmware
+```sh
+cd yaeger/
+pio run --target upload
 ```
-## Pi setup as Kiosk
 
-1. Install FullPageOS onto a Raspberry Pi.
-2. Connect GPIO 3 (pin 5) and GND (pin 6) to a momentary switch — gives you a hardware shutdown
-   button after step 8.
-3. Plug in a keyboard.
-4. Press `Ctrl+Alt+F1` to access the terminal.
-5. Bring up a WiFi hotspot so the ESP32 has a network to join, and make it auto-start on boot:
-   ```sh
-   sudo nmcli device wifi hotspot ssid MyFullPageHotspot password MyPassword123
-   sudo nmcli connection modify Hotspot connection.autoconnect yes
-   sudo nmcli connection modify Hotspot connection.autoconnect-priority 100
-   ```
-6. Edit the boot config: `sudo nano /boot/firmware/config.txt`.
-7. At the bottom, add `dtoverlay=gpio-shutdown`.
-8. Press `Ctrl+O`, then `Enter` to save. Press `Ctrl+X` to exit nano.
+### Miniweb (dashboard UI)
+```sh
+cd miniweb/
+npm install
+npm run build      # outputs to ../data/
+pio run --target uploadfs
+```
 
+### Crack listener firmware
+```sh
+cd cracks/
+pio run --target upload
+```
 
+---
 
-## Web Profile Creation (maybe works?)
-You can also try the [Gaggiuino web profiler](https://matthew73210.github.io/Gaggiuino-web-profiler/) under the _pun_
-"Yägermeister Mode" to generate profiles.
+## Repository Layout
 
-## Disclaimer
-
-Be careful when messing about with electronics and high voltage. I can not and will not take any responsibility for any
-sort of damage or injury caused by Yaeger, either directly or indirectly.
-**You do this at your own risk**
-
-## You have been warned
-
+```
+cracks/          Crack listener board firmware (ESP32-S3 + INMP441)
+miniweb/         Dashboard web UI (VanJS + TypeScript, served from LittleFS)
+PCB/             PCB manufacturing files (Gerbers, BOM)
+schema/          Schematics and board PDFs
+src/             Main board firmware (ESP32-S3, Arduino/PlatformIO)
+tools/           Development utilities (crack-tuner.html)
+```

@@ -14,8 +14,9 @@ import {
   connectionStatus,
   sendCommand,
 } from "./websocket";
+import { CrackTuner } from "./crack-serial";
 
-const { label, button, div, input, span, header } = van.tags;
+const { label, button, div, input, span, header, select, option } = van.tags;
 
 // Slider state + drag-lockout (suppress WS echo while user is dragging)
 export const slider1Value = van.state(50);
@@ -33,6 +34,7 @@ const currentROR  = van.state<number | null>(null);
 const roastName   = van.state("");
 const fanMode     = van.state<"pwm" | "ssr">("pwm");
 const fanModeChanged = van.state(false);
+const btSource    = van.state<"bt" | "ir" | "avg">("bt");
 const cooldownFanSpeed = van.state(50); // local only — not synced to firmware
 const wifiSSID  = van.state("");
 const wifiPass  = van.state("");
@@ -63,6 +65,9 @@ van.derive(() => {
     if (message.fanMode === "pwm" || message.fanMode === "ssr") {
       fanMode.val = message.fanMode;
       fanModeChanged.val = false;
+    }
+    if (message.btSource === "bt" || message.btSource === "ir" || message.btSource === "avg") {
+      btSource.val = message.btSource;
     }
     return;
   }
@@ -434,9 +439,22 @@ const DeviceSettings = () =>
           oninput: (e: Event) => { cooldownFanSpeed.val = parseInt((e.target as HTMLInputElement).value, 10) || 0; },
         }),
       ),
+      div(
+        { class: "pid-field" },
+        label({ class: "pid-label" }, "BT Source"),
+        select({
+          class: "pid-input",
+          value: () => btSource.val,
+          onchange: (e: Event) => { btSource.val = (e.target as HTMLSelectElement).value as "bt" | "ir" | "avg"; },
+        },
+          option({ value: "bt" }, "BT Thermocouple"),
+          option({ value: "ir" }, "IR Object (MLX90614)"),
+          option({ value: "avg" }, "Avg BT + IR"),
+        ),
+      ),
       button({
         class: "pid-apply",
-        onclick: () => sendCommand({ id: 1, command: "setPreferences", fanMode: fanMode.val }),
+        onclick: () => sendCommand({ id: 1, command: "setPreferences", fanMode: fanMode.val, btSource: btSource.val }),
       }, "Apply"),
     ),
   );
@@ -726,6 +744,13 @@ const createApp = () =>
         SavedRoastsList,
         UploadRoastInput,
       ),
+    ),
+
+    // Crack tuner — full-width, collapsed by default
+    details(
+      { class: "settings-panel" },
+      summary({ class: "settings-summary" }, "Crack Tuner"),
+      CrackTuner,
     ),
   );
 
