@@ -142,6 +142,56 @@
 
 ---
 
+---
+
+## Current Firmware GPIO Assignment (v2 — ESP32-S3 DevKitC-1 N16R8)
+
+The v1 GPIO table above is superseded by the v2 schematic (`SCH_yaeger_2_2026-09-27.pdf`). Authoritative source is `src/config.h`.
+
+| GPIO | Signal | Notes |
+|------|--------|-------|
+| 3 | Heater PWM | 50 Hz SSR control (`HEATER_FREQUENCY`), capped at `MAX_HEATER_POWER` = 65% |
+| 4 | ARGB data | WS2812B status LED |
+| 5 | SPI MISO | Shared by both MAX31855s |
+| 6 | SPI CLK | Shared by both MAX31855s |
+| 7 | DHT22 data | Ambient temperature + humidity (CH5 / RH); optional — firmware detects presence at boot |
+| 8 | Fan PWM | 20 kHz (`FAN_FREQUENCY`); level-shifted to 5V via 74AHCT1G125 |
+| 15 | ET /CS | MAX31855 — exhaust/inlet thermocouple |
+| 16 | BT /CS | MAX31855 — bean thermocouple |
+| 17 | UART RX (Serial2) | Receives CRACK events from crack listener board |
+| 18 | UART TX (Serial2) | Crack listener TX — not currently used by listener firmware |
+| 41 | I2C SDA | MLX90614 IR probe (0x5A) + SSD1306 OLED (0x3C) |
+| 42 | I2C SCL | MLX90614 + SSD1306 shared bus |
+| 43 | USB CDC TX | Debug serial (native USB) |
+| 44 | USB CDC RX | Debug serial |
+| 48 | Onboard NeoPixel | DevKit status LED |
+
+### WebSocket data channels
+| Channel | Source | Condition |
+|---------|--------|-----------|
+| ET / CH1 | MAX31855 GPIO 15 CS | Always |
+| BT / CH2 | MAX31855 GPIO 16 CS | Always |
+| CH3 | MLX90614 object temp | Only if sensor detected at boot (`_irPresent`) |
+| CH4 | MLX90614 ambient temp | Only if sensor detected at boot |
+| CH5 | DHT22 temperature | Only if sensor detected at boot (`_dhtPresent`) |
+| RH | DHT22 humidity | Only if sensor detected at boot |
+
+Optional sensors return `0` when absent — Artisan will receive 0°C for those channels.
+
+### PWM parameters
+- **Heater:** 50 Hz, software-limited to 65% duty max (`MAX_HEATER_POWER`). Safety interlock: output forced to 0 if fan is off.
+- **Fan:** 20 kHz. Level-shifted 3.3V→5V via 74AHCT1G125 before the fan controller connector.
+
+### NVS-stored preferences
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `ssid` / `pass` | string | — | Wi-Fi credentials |
+| `fanMode` | string | `"pwm"` | Fan control mode |
+| `btSource` | string | `"bt"` | Artisan BT source: `bt` / `ir` / `avg` |
+| `coolingFan` | int | — | Cooling fan % |
+
+---
+
 ## Common Passives (consolidate order)
 | Value | Package | LCSC # | Used for |
 |-------|---------|--------|---------|
