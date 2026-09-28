@@ -1,7 +1,15 @@
 # PCB Design Notes — ESP32 Thermocouple + Motor Controller Board
 
+
+## Questions/Goals for The Pros:
+Figure out net for TC blocks - shouldn't share CS1
+Physical separation of logic and TC? 
+General layout
+routing
+
+
 ## Microcontroller
-- **ESP32** (S2 or S3 for native USB)
+- **ESP32** S3
 - 3.3V logic throughout
 
 ---
