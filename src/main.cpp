@@ -15,6 +15,7 @@
 #include "wifi_setup.h"
 #include "Control.h"
 #include "preferenceKeys.h"
+#include "CrackDetector.h"
 
 #include "leds.h"
 
@@ -95,7 +96,7 @@ void setup() {
 
 
 
-  Serial2.begin(115200, SERIAL_8N1, CRACK_RX_PIN, CRACK_TX_PIN);
+  CrackDetector::begin();
 
   control = new Control(preferences.getString(fanModeKey, "pwm") == "ssr");
 
@@ -125,4 +126,20 @@ void loop() {
   wsHandler->loop();
   updateDisplay(control);
   updateLeds(control);
+
+  // Handle tuning commands from USB Serial (crack-tuner.html or terminal)
+  static String serialCmd = "";
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      serialCmd.trim();
+      if (serialCmd.length() > 0) {
+        CrackDetector::processSerialCommand(serialCmd);
+      }
+      serialCmd = "";
+    } else {
+      serialCmd += c;
+    }
+  }
+  CrackDetector::updateLed();
 }

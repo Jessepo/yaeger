@@ -16,7 +16,7 @@ private:
   float _heaterVal = 0.f;
   Sensor _etSensor;
   Sensor _btSensor;
-  Adafruit_MLX90614 _ir;
+  mutable Adafruit_MLX90614 _ir;
   DHT _dht;
   bool _irPresent = false;
   bool _dhtPresent = false;

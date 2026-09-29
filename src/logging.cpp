@@ -1,4 +1,5 @@
 #include "logging.h"
+#include "CrackDetector.h"
 #include <WebSerial.h>
 
 
@@ -20,7 +21,9 @@ void setupLogging(AsyncWebServer *server) {
 }
 
 void log(const char *message) {
-  Serial.println(message);
+  if (!CrackDetector::isMonitorMode()) {
+    Serial.println(message);
+  }
   WebSerial.println(message);
 }
 
@@ -31,5 +34,7 @@ void logf(const char *format, ...) {
   vsnprintf(buf, sizeof(buf), format, args);
   va_end(args);
   WebSerial.print(buf);
-  Serial.print(buf);
+  if (!CrackDetector::isMonitorMode()) {
+    Serial.print(buf);
+  }
 }

@@ -5,21 +5,24 @@ ESP32-S3 coffee roaster controller. Artisan drives the roast via WebSocket; the 
 ## Architecture
 
 ```
-Artisan (PC) ──WebSocket──► ESP32-S3 main board ──SPI──► MAX31855 (ET, BT thermocouples)
-                                                  ──I2C──► MLX90614 IR probe + SSD1306 OLED
-                                                  ──PWM──► Heater SSR + Fan
-                                                  ──UART──► Crack listener board
-Crack listener board ────────────────────────────────────────────────────────────────────┘
-  ESP32-S3 + INMP441 MEMS mic
-  FFT-based first-crack detection → sends CRACK event over UART
-  Main board relays → Artisan push event {"message":"FCs"}
+Artisan (PC) ──WebSocket──► ESP32-S3 (Dual-Core 240 MHz)
+                              ├─ Core 1: Roaster Control & Web Loop
+                              │    ──SPI──► MAX31855 (ET, BT thermocouples)
+                              │    ──I2C──► MLX90614 IR probe + SSD1306 OLED
+                              │    ──PWM──► Heater SSR + Fan
+                              │    ──1-Wire► Optional DHT22 sensor
+                              │
+                              └─ Core 0: Real-Time Crack Detector Task (FreeRTOS)
+                                   ──I2S DMA──► INMP441 / ICS-43434 MEMS Mic
+                                   Continuous 16 kHz audio → 256-pt Hann FFT
+                                   Direct in-memory event → Artisan push {"message":"FCs"}
 ```
 
-The firmware does not own profiles or PID loops. Artisan controls burner and fan via WebSocket sliders. The board enforces one safety rule: heater output is zero whenever the fan is off.
+The firmware does not own profiles or PID loops. Artisan controls burner and fan via WebSocket sliders. The board enforces one safety rule: heater output is zero whenever the fan is off. Crack detection runs on Core 0 without blocking or jittering Core 1 roaster operations.
 
 ---
 
-## Main Board Hardware Pinout (ESP32-S3 DevKitC-1 N16R8)
+## Hardware Pinout (ESP32-S3 DevKitC-1 N16R8)
 
 | GPIO | Function | Notes |
 |------|----------|-------|
@@ -29,15 +32,16 @@ The firmware does not own profiles or PID loops. Artisan controls burner and fan
 | 6 | SPI CLK | Shared thermocouple bus |
 | 7 | DHT22 data | Optional ambient humidity/temperature sensor |
 | 8 | Fan PWM | 20 kHz |
-| 15 | ET CS | MAX31855 exhaust/inlet air thermocouple |
-| 16 | BT CS | MAX31855 bean thermocouple |
-| 17 | CRACK RX (Serial2) | Receives UART from crack listener |
-| 18 | CRACK TX (Serial2) | Not currently used |
+| 13 | I2S_MIC_SD | INMP441 / ICS-43434 MEMS mic serial data |
+| 14 | I2S_MIC_SCK | INMP441 / ICS-43434 MEMS mic bit clock |
+| 15 | ET CS | MAX31855 exhaust/inlet air thermocouple chip select |
+| 16 | BT CS | MAX31855 bean thermocouple chip select |
+| 17 | I2S_MIC_WS | INMP441 / ICS-43434 MEMS mic word select |
 | 41 | I2C SDA | MLX90614 IR probe + SSD1306 OLED |
 | 42 | I2C SCL | MLX90614 IR probe + SSD1306 OLED |
-| 43 | USB CDC TX | Debug serial |
-| 44 | USB CDC RX | Debug serial |
-| 48 | Onboard NeoPixel | Status indicator |
+| 43 | USB CDC TX | Upload / serial monitor |
+| 44 | USB CDC RX | Upload / serial monitor |
+| 48 | Onboard NeoPixel | Status indicator (boot, ready, mic hit/crack detection) |
 
 ### Optional DHT22 ambient sensor
 GPIO 7 is reserved for an optional DHT22 sensor. Wire it as:
@@ -87,22 +91,33 @@ The SSD1306 OLED shares the same I2C bus (address 0x3C). The MLX90614 is at addr
 
 ---
 
-## Crack Listener Board
+## Acoustic First-Crack Detector (Integrated Core 0 Task)
 
-A separate ESP32-S3 with an INMP441 MEMS microphone. Listens continuously, runs an FFT on 256-sample windows at 16 kHz, and sends a UART message when it detects the acoustic signature of first crack.
+An integrated FreeRTOS task on **Core 0** continuously analyzes audio from an I2S MEMS microphone (INMP441 or ICS-43434) to detect the acoustic signature of coffee first-crack pops and pushes events to Artisan automatically.
 
-### Crack listener pinout
+### Multi-Core FreeRTOS Design
+- **Core 0 (PRO_CPU):** Runs the `CrackDetector` task at priority 2. Blocks on I2S DMA until 256 samples arrive (~16 ms), computes a 256-point Hann-windowed FFT in ~0.4 ms (< 3% CPU utilization), and checks band magnitudes. Completely isolated from Core 1's sensor stalls and display refreshes.
+- **Core 1 (APP_CPU):** Runs the main roaster control loop, MAX31855 SPI reads, PWM/SSR controls, and OLED display.
+- **Direct Event Dispatch:** When 3 hits occur within the debounce window (3 seconds), the task sets an atomic flag. The WebSocket loop picks it up and pushes `{"message":"FCs"}` to Artisan and the web dashboard without UART latency or string parsing.
 
-| GPIO | Function |
-|------|----------|
-| 13 | I2S SD (INMP441 data) |
-| 14 | I2S SCK (INMP441 clock) |
-| 15 | I2S WS (INMP441 word select) |
-| 16 | UART RX (from main board — not currently used) |
-| 17 | UART TX → main board GPIO 17 |
-| 48 | NeoPixel status LED |
+### Microphone Pinout
 
-### Detection parameters (stored in NVS)
+| Mic Pin (INMP441 / ICS-43434) | ESP32-S3 GPIO | Notes |
+|:-----------------------------:|:-------------:|-------|
+| VDD | 3.3 V | Power |
+| GND | GND | Ground |
+| L/R | GND | Left channel |
+| SD  | GPIO 13 | Serial Data (`I2S_MIC_SD_PIN`) |
+| SCK | GPIO 14 | Bit Clock (`I2S_MIC_SCK_PIN`) |
+| WS  | GPIO 17 | Word Select (`I2S_MIC_WS_PIN` — moved from GPIO 15 to avoid conflict with `MAX1CS`) |
+
+### Onboard Status NeoPixel (GPIO 48)
+- **Idle:** Dim green (indicates ready / detecting)
+- **Audio Hit:** Bright green flash (100 ms) whenever frequency magnitude crosses threshold
+- **Crack Confirmed:** Red flash (500 ms) when 3 hits occur within 3 seconds
+- **Monitor Mode:** Blue (active audio streaming to tuner tool)
+
+### Detection Parameters (Stored in NVS)
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -110,20 +125,20 @@ A separate ESP32-S3 with an INMP441 MEMS microphone. Listens continuously, runs 
 | `hiFreq` | 7500 Hz | Upper bound of crack frequency band |
 | `threshold` | 35000 | FFT magnitude threshold for detection |
 
-**Note:** `monitorMode` in `cracks/src/main.cpp` is currently set to `true` (starts in audio-streaming mode on boot). Change to `false` for production use so crack detection runs automatically without the browser UI connected.
+### Tuning the Crack Detector
 
-**Note:** `Serial2.printf("CRACK,...")` in `cracks/src/main.cpp` is commented out. Uncomment it for the UART trigger to reach the main board.
+You can tune the detector live using **`tools/crack-tuner.html`** or the dashboard Crack Tuner panel:
+1. Connect the ESP32-S3 via USB at 115200 baud.
+2. The tool sends command `m` to enter monitor mode (streams raw 16 kHz int16 PCM audio with `0xAA 0x55` header). While in monitor mode, text logging to `Serial` is muted automatically.
+3. Adjust **Low freq**, **High freq**, and **Threshold** sliders while listening to audio and viewing the real-time spectrogram.
+4. Saving sends `s,<lo>,<hi>,<thresh>` to persist new values to NVS namespace `crack`.
+5. Disconnecting sends `x` to restore standard detection mode and resume serial logging.
 
-### Tuning the crack detector
-
-Open the **Crack Tuner** panel in the yaeger.local dashboard (requires Chrome/Edge with Web Serial enabled for http://yaeger.local — see below). Connect to the crack listener board via USB. The panel shows a live spectrogram and FFT with adjustable frequency band and threshold sliders. Click **Save to Board** to persist new values to NVS.
-
-To enable Web Serial on yaeger.local:
-1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`
-2. Add `http://yaeger.local` to the list
-3. Relaunch Chrome
-
-Standalone alternative: `cd tools && npx serve .` then open `http://localhost:3000/crack-tuner.html`.
+Run tuner standalone:
+```sh
+cd tools && npx serve .
+# Open http://localhost:3000/crack-tuner.html in Chrome or Edge
+```
 
 ---
 
@@ -145,19 +160,18 @@ Standalone alternative: `cd tools && npx serve .` then open `http://localhost:30
 
 | Slider | Action |
 |--------|--------|
-| Burner | `{"id":1,"command":"setBurner","value":{})` |
+| Burner | `{"id":1,"command":"setBurner","value":{}}` |
 | Fan | `{"id":1,"command":"setFan","value":{}}` |
 
 **Push events** (Config → Device → WebSocket → Enable push events):
-- `FCs` → First crack start event
+- `FCs` → First crack start event (fired automatically by the I2S crack detector)
 
 ---
 
 ## Building
 
-### Main board firmware
+### Roaster Firmware (includes Crack Detector)
 ```sh
-cd yaeger/
 pio run --target upload
 ```
 
@@ -169,21 +183,15 @@ npm run build      # outputs to ../data/
 pio run --target uploadfs
 ```
 
-### Crack listener firmware
-```sh
-cd cracks/
-pio run --target upload
-```
-
 ---
 
 ## Repository Layout
 
 ```
-cracks/          Crack listener board firmware (ESP32-S3 + INMP441)
+cracks/          Legacy standalone crack listener firmware (prototype)
 miniweb/         Dashboard web UI (VanJS + TypeScript, served from LittleFS)
 PCB/             PCB manufacturing files (Gerbers, BOM)
 schema/          Schematics and board PDFs
-src/             Main board firmware (ESP32-S3, Arduino/PlatformIO)
+src/             Unified roaster & crack detector firmware (ESP32-S3, Arduino/PlatformIO)
 tools/           Development utilities (crack-tuner.html)
 ```

@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "preferenceKeys.h"
+#include "CrackDetector.h"
 
 WSRequestHandler::WSRequestHandler(AsyncWebSocket *ws, Control *control, Preferences *preferences) {
   using namespace std::placeholders;
@@ -136,21 +137,10 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
 }
 
 void WSRequestHandler::loop() {
-  // Non-blocking UART read from crack listener board.
-  // Each complete line starting with "CRACK" triggers a first-crack event
-  // pushed to all connected WebSocket clients (Artisan + dashboard).
-  while (Serial2.available()) {
-    char c = (char) Serial2.read();
-    if (c == '\n') {
-      _crackLineBuf.trim();
-      if (_crackLineBuf.startsWith("CRACK")) {
-        log("First crack detected via UART — sending FCs event");
-        sendEvent("FCs");
-      }
-      _crackLineBuf = "";
-    } else {
-      _crackLineBuf += c;
-    }
+  // Check for crack detection event from CrackDetector task (Core 0)
+  if (CrackDetector::popCrackEvent()) {
+    log("First crack detected via I2S microphone — sending FCs event");
+    sendEvent("FCs");
   }
 
   if (millis() - _lastUpdate < 100) return;

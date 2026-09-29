@@ -17,32 +17,29 @@ push crack events back to Artisan unprompted.
 | 5    | SPI MISO | MAX31855 × 2 (shared data line) |
 | 6    | SPI CLK  | MAX31855 × 2 (shared clock) |
 | 8    | FAN_PIN  | Fan driver — PWM 20 kHz or SSR digital |
+| 13   | I2S_MIC_SD | INMP441 / ICS-43434 mic data |
+| 14   | I2S_MIC_SCK | Mic bit clock |
 | 15   | MAX1CS   | ET thermocouple chip select (exhaust) |
 | 16   | MAX2CS   | BT thermocouple chip select (bean) |
-| 17   | CRACK_RX | Serial2 RX ← crack listener UART TX |
-| 18   | CRACK_TX | Serial2 TX (not currently used) |
+| 17   | I2S_MIC_WS | Mic word select (I2S WS) |
 | 41   | I2C SDA  | OLED SSD1306 + MLX90614 IR probe |
 | 42   | I2C SCL  | OLED SSD1306 + MLX90614 IR probe |
 | 43   | USB CDC TX | Upload / serial monitor |
 | 44   | USB CDC RX | Upload / serial monitor |
-| 48   | NeoPixel | Onboard status pixel (red = booting, green = ready) |
+| 48   | NeoPixel | Onboard status pixel (red = booting/crack, green = ready) |
 
-### Crack listener board (separate ESP32-S3)
+### I2S MEMS Microphone (Directly on board, Core 0 FreeRTOS task)
 
-| GPIO | Signal | Notes |
-|-----:|--------|-------|
-| 13   | I2S SD  | INMP441 / ICS-43434 mic data |
-| 14   | I2S SCK | Mic bit clock |
-| 15   | I2S WS  | Mic word select |
-| 16   | UART RX | ← main board (currently unused) |
-| 17   | UART TX | → main board CRACK_RX (GPIO 17) |
-| 48   | NeoPixel | Status LED |
+An I2S MEMS microphone (INMP441, ICS-43434) connects directly to the same ESP32-S3:
 
-Wire crack listener GPIO 17 → main board GPIO 17, and a shared GND.
-
-> **Important:** the `Serial2.printf("CRACK,...")` line in
-> `cracks/src/main.cpp` is commented out. Uncomment it so the listener
-> actually transmits over UART.
+| Mic Pin | ESP32-S3 GPIO | Notes |
+|:-------:|:-------------:|-------|
+| VDD     | 3.3 V         | Power |
+| GND     | GND           | Ground |
+| L/R     | GND           | Left channel |
+| SD      | GPIO 13       | Serial Data |
+| SCK     | GPIO 14       | Bit Clock |
+| WS      | GPIO 17       | Word Select |
 
 ### IR probe (MLX90614)
 
@@ -148,8 +145,8 @@ Yaeger can push these at any time without being polled:
 | `{"message":"DRY"}` | Marks dry end |
 | `{"message":"SCs"}` | Marks second crack start |
 
-First crack is fired automatically when the crack listener board sends a
-`CRACK,...` line over UART. The others can be added as dashboard buttons
+First crack is fired automatically when the onboard I2S microphone detects
+crack pops (via the Core 0 FFT task). The others can be added as dashboard buttons
 in the Yaeger web UI if needed.
 
 ---

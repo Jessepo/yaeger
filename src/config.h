@@ -25,9 +25,11 @@
 #define DHT_PIN 7
 #define DHT_TYPE DHT22
 
-// UART to crack listener board (separate ESP32-S3)
-#define CRACK_RX_PIN 17
-#define CRACK_TX_PIN 18
+// I2S MEMS Microphone for Crack Detection
+// Note: WS moved to GPIO 17 because GPIO 15 is used by MAX1CS
+#define I2S_MIC_WS_PIN   17
+#define I2S_MIC_SCK_PIN  14
+#define I2S_MIC_SD_PIN   13
 
 // DEVICE PARAMETERS
 #define MAX_HEATER_POWER 65

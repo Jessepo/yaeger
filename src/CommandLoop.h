@@ -10,7 +10,6 @@ private:
   Preferences *preferences;
   AsyncWebSocket *ws;
   unsigned long _lastUpdate;
-  String _crackLineBuf;
 
   void sendEvent(const char *event);
 
