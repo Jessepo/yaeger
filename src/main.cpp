@@ -127,18 +127,22 @@ void loop() {
   updateDisplay(control);
   updateLeds(control);
 
-  // Handle tuning commands from USB Serial (crack-tuner.html or terminal)
-  static String serialCmd = "";
-  while (Serial.available()) {
-    char c = (char)Serial.read();
-    if (c == '\n' || c == '\r') {
-      serialCmd.trim();
-      if (serialCmd.length() > 0) {
-        CrackDetector::processSerialCommand(serialCmd);
+  // Handle tuning commands from USB Serial (crack-tuner.html or terminal).
+  // Skip while in monitor mode: Core 0 is streaming binary PCM on Serial and
+  // mixing reads here would corrupt both streams.
+  if (!CrackDetector::isMonitorMode()) {
+    static String serialCmd = "";
+    while (Serial.available()) {
+      char c = (char)Serial.read();
+      if (c == '\n' || c == '\r') {
+        serialCmd.trim();
+        if (serialCmd.length() > 0) {
+          CrackDetector::processSerialCommand(serialCmd);
+        }
+        serialCmd = "";
+      } else {
+        serialCmd += c;
       }
-      serialCmd = "";
-    } else {
-      serialCmd += c;
     }
   }
   CrackDetector::updateLed();

@@ -22,26 +22,32 @@ static std::atomic<bool> _crackPending{false};
 static std::atomic<bool> _monitorMode{false};
 static TaskHandle_t _taskHandle = nullptr;
 
-static int loFreq = 3500;
-static int hiFreq = 7500;
-static int crackThresh = 35000;
+// Atomics so Core 0 task and Core 1 loop() can safely read/write these concurrently
+static std::atomic<int> loFreq{3500};
+static std::atomic<int> hiFreq{7500};
+static std::atomic<int> crackThresh{35000};
 static const int delaytime = 3000;
 
-static unsigned long _ledExpireMillis = 0;
+// LED state — written from any core via requestLedColor(), applied to pixels hardware
+// only from Core 1 via updateLed(). Adafruit_NeoPixel/RMT is not thread-safe.
+static std::atomic<uint32_t> _ledColor{0};
+static std::atomic<uint32_t> _ledExpireMillis{0};
+static std::atomic<bool>     _ledDirty{false};
 
-static void setPixelColorNonBlocking(uint8_t r, uint8_t g, uint8_t b, unsigned long durationMs = 0) {
-  pixels.setPixelColor(0, Adafruit_NeoPixel::Color(r, g, b));
-  pixels.show();
-  _ledExpireMillis = (durationMs > 0) ? (millis() + durationMs) : 0;
+static void requestLedColor(uint8_t r, uint8_t g, uint8_t b, unsigned long durationMs = 0) {
+  _ledColor.store(Adafruit_NeoPixel::Color(r, g, b), std::memory_order_relaxed);
+  _ledExpireMillis.store(durationMs > 0 ? (uint32_t)(millis() + durationMs) : 0,
+                         std::memory_order_relaxed);
+  _ledDirty.store(true, std::memory_order_release);
 }
 
 void CrackDetector::begin() {
   _crackPrefs.begin("crack", false);
-  loFreq      = _crackPrefs.getInt("loFreq", 3500);
-  hiFreq      = _crackPrefs.getInt("hiFreq", 7500);
-  crackThresh = _crackPrefs.getInt("threshold", 35000);
+  loFreq.store(_crackPrefs.getInt("loFreq", 3500));
+  hiFreq.store(_crackPrefs.getInt("hiFreq", 7500));
+  crackThresh.store(_crackPrefs.getInt("threshold", 35000));
 
-  logf("[CrackDetector] Init: lo=%d hi=%d thresh=%d\n", loFreq, hiFreq, crackThresh);
+  logf("[CrackDetector] Init: lo=%d hi=%d thresh=%d\n", loFreq.load(), hiFreq.load(), crackThresh.load());
 
   i2s_config_t i2s_config = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
@@ -70,11 +76,10 @@ void CrackDetector::begin() {
   i2s_set_pin(I2S_NUM_0, &pin_config);
   log("[CrackDetector] I2S driver initialized on Core 0");
 
-  // Spawn detection task on Core 0
   xTaskCreatePinnedToCore(
     taskEntry,
     "CrackDetector",
-    4096,
+    6144,
     nullptr,
     2,
     &_taskHandle,
@@ -93,24 +98,24 @@ bool CrackDetector::isMonitorMode() {
 void CrackDetector::setMonitorMode(bool enabled) {
   _monitorMode.store(enabled);
   if (enabled) {
-    setPixelColorNonBlocking(0, 0, 150); // Blue for monitor mode
+    requestLedColor(0, 0, 150); // Blue for monitor mode
   } else {
-    setPixelColorNonBlocking(0, 20, 0);  // Dim green for normal detection
+    requestLedColor(0, 20, 0);  // Dim green for normal detection
   }
 }
 
-int CrackDetector::getLoFreq()    { return loFreq; }
-int CrackDetector::getHiFreq()    { return hiFreq; }
-int CrackDetector::getThreshold() { return crackThresh; }
+int CrackDetector::getLoFreq()    { return loFreq.load(); }
+int CrackDetector::getHiFreq()    { return hiFreq.load(); }
+int CrackDetector::getThreshold() { return crackThresh.load(); }
 
 void CrackDetector::setParams(int lo, int hi, int thresh) {
-  loFreq = lo;
-  hiFreq = hi;
-  crackThresh = thresh;
+  loFreq.store(lo);
+  hiFreq.store(hi);
+  crackThresh.store(thresh);
   _crackPrefs.putInt("loFreq", lo);
   _crackPrefs.putInt("hiFreq", hi);
   _crackPrefs.putInt("threshold", thresh);
-  logf("[CrackDetector] Params saved: lo=%d hi=%d thresh=%d\n", loFreq, hiFreq, crackThresh);
+  logf("[CrackDetector] Params saved: lo=%d hi=%d thresh=%d\n", lo, hi, thresh);
 }
 
 void CrackDetector::processSerialCommand(const String &cmd) {
@@ -134,19 +139,25 @@ void CrackDetector::processSerialCommand(const String &cmd) {
   }
 }
 
+// Called only from Core 1 (loop()) — the only place that touches pixels hardware
 void CrackDetector::updateLed() {
-  if (_ledExpireMillis > 0 && millis() >= _ledExpireMillis) {
-    _ledExpireMillis = 0;
-    if (_monitorMode.load()) {
-      setPixelColorNonBlocking(0, 0, 150); // Blue
-    } else {
-      setPixelColorNonBlocking(0, 20, 0);  // Idle dim green
-    }
+  uint32_t exp = _ledExpireMillis.load(std::memory_order_relaxed);
+  if (exp > 0 && millis() >= exp) {
+    _ledExpireMillis.store(0, std::memory_order_relaxed);
+    uint32_t idleColor = _monitorMode.load()
+      ? Adafruit_NeoPixel::Color(0, 0, 150)
+      : Adafruit_NeoPixel::Color(0, 20, 0);
+    _ledColor.store(idleColor, std::memory_order_relaxed);
+    _ledDirty.store(true, std::memory_order_release);
+  }
+  if (_ledDirty.exchange(false, std::memory_order_acq_rel)) {
+    pixels.setPixelColor(0, _ledColor.load(std::memory_order_relaxed));
+    pixels.show();
   }
 }
 
 void CrackDetector::taskEntry(void *pvParameters) {
-  int crackcount = 0, counttime = 0;
+  int counttime = 0;
   bool isthis1stcount = false, isthis2ndcount = false, isthis3rdcount = false;
   unsigned long recordmillis1 = 0, recordmillis2 = 0, recordmillis3 = 0;
 
@@ -184,9 +195,13 @@ void CrackDetector::taskEntry(void *pvParameters) {
     float hitFreq = 0.0f;
     float hitMag = 0.0f;
 
+    int loF   = loFreq.load(std::memory_order_relaxed);
+    int hiF   = hiFreq.load(std::memory_order_relaxed);
+    int thresh = crackThresh.load(std::memory_order_relaxed);
+
     for (int i = 2; i <= SAMPLES / 2; i++) {
       float freq = i * 1.0f * SAMPLING_FREQUENCY / SAMPLES;
-      if (freq >= (float)loFreq && freq <= (float)hiFreq && vReal[i] > (float)crackThresh) {
+      if (freq >= (float)loF && freq <= (float)hiF && vReal[i] > (float)thresh) {
         hitInFrame = true;
         hitFreq = freq;
         hitMag = vReal[i];
@@ -195,8 +210,6 @@ void CrackDetector::taskEntry(void *pvParameters) {
     }
 
     if (hitInFrame) {
-      if (crackcount <= 4) crackcount++; else crackcount = 0;
-
       if (!isthis1stcount) {
         recordmillis1 = millis();
         isthis1stcount = true;
@@ -211,15 +224,15 @@ void CrackDetector::taskEntry(void *pvParameters) {
         counttime = 3;
       }
 
-      setPixelColorNonBlocking(0, 180, 0, 100); // Bright green indicator for hit
+      requestLedColor(0, 180, 0, 100); // Bright green indicator for hit
     }
 
     // Check 3-hit detection window
     if (isthis1stcount && isthis3rdcount) {
       unsigned long elapsed = recordmillis3 - recordmillis1;
-      if (elapsed <= (unsigned long)delaytime && counttime <= 3) {
+      if (elapsed <= (unsigned long)delaytime) {
         _crackPending.store(true);
-        setPixelColorNonBlocking(150, 0, 0, 500); // Red flash on crack trigger
+        requestLedColor(150, 0, 0, 500); // Red flash on crack trigger
       }
       isthis1stcount = isthis2ndcount = isthis3rdcount = false;
       recordmillis1 = recordmillis2 = recordmillis3 = 0;
