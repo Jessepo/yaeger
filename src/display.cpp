@@ -2,38 +2,43 @@
 #include "config.h"
 #include "Control.h"
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1327.h>
+#include <Adafruit_SH110X.h>
 #include <WiFi.h>
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 128
 #define OLED_RESET -1
 
-// Most 1.5" 128x128 SSD1327 I2C modules default to 0x3D (some to 0x3C)
-#define OLED_I2C_ADDR_PRIMARY 0x3D
-#define OLED_I2C_ADDR_SECONDARY 0x3C
+// Most 128x128 SH1107 I2C modules default to 0x3C (some to 0x3D)
+#define OLED_I2C_ADDR_PRIMARY 0x3C
+#define OLED_I2C_ADDR_SECONDARY 0x3D
 
-static Adafruit_SSD1327 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+static Adafruit_SH1107 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+static bool displayReady = false;
 
 void initDisplay() {
   Wire.begin(DISPLAY_DA, DISPLAY_CL);
-  Wire.setClock(400000); // 400kHz Fast I2C for 128x128 buffer transfer
+  Wire.setClock(400000); // 400kHz Fast I2C
+  delay(100);
 
-  if (!display.begin(OLED_I2C_ADDR_PRIMARY)) {
-    Serial.println("SSD1327 not detected at 0x3D, attempting 0x3C...");
-    if (!display.begin(OLED_I2C_ADDR_SECONDARY)) {
-      Serial.println("SSD1327 display failed to initialize on both 0x3D and 0x3C");
+  if (!display.begin(OLED_I2C_ADDR_PRIMARY, true)) {
+    Serial.println("SH1107 not detected at 0x3C, attempting 0x3D...");
+    if (!display.begin(OLED_I2C_ADDR_SECONDARY, true)) {
+      Serial.println("SH1107 display failed to initialize on both 0x3C and 0x3D");
+      displayReady = false;
       return;
     }
   }
+  displayReady = true;
   display.clearDisplay();
   display.display();
 }
 
 void setWifiIP() {
+  if (!displayReady) return;
   display.clearDisplay();
   display.setTextSize(1);
-  display.setTextColor(SSD1327_WHITE);
+  display.setTextColor(SH110X_WHITE);
   display.setCursor(0, 10);
   display.println("Yaeger online");
   display.setCursor(0, 30);
@@ -44,8 +49,10 @@ void setWifiIP() {
 }
 
 static void updateDisplay(Control *control) {
+  if (!displayReady) return;
+
   display.clearDisplay();
-  display.setTextColor(SSD1327_WHITE);
+  display.setTextColor(SH110X_WHITE);
 
   // --- Temperatures Row (ET / BT) ---
   // ET
@@ -62,7 +69,7 @@ static void updateDisplay(Control *control) {
   display.print(control->getBeanTemp(), 1);
 
   // Divider 1
-  display.drawLine(0, 46, 127, 46, SSD1327_WHITE);
+  display.drawLine(0, 46, 127, 46, SH110X_WHITE);
 
   // --- Heater & Fan Controls Row ---
   float heater = control->getHeater();
@@ -75,10 +82,10 @@ static void updateDisplay(Control *control) {
   display.print("%");
 
   // Heater bar (x=68, y=53, w=58, h=6)
-  display.drawRect(68, 53, 58, 6, SSD1327_WHITE);
+  display.drawRect(68, 53, 58, 6, SH110X_WHITE);
   int heaterWidth = (int)((heater / 100.0f) * 54.0f);
   if (heaterWidth > 0) {
-    display.fillRect(70, 55, heaterWidth, 2, SSD1327_WHITE);
+    display.fillRect(70, 55, heaterWidth, 2, SH110X_WHITE);
   }
 
   display.setCursor(0, 66);
@@ -87,14 +94,14 @@ static void updateDisplay(Control *control) {
   display.print("%");
 
   // Fan bar (x=68, y=67, w=58, h=6)
-  display.drawRect(68, 67, 58, 6, SSD1327_WHITE);
+  display.drawRect(68, 67, 58, 6, SH110X_WHITE);
   int fanWidth = (int)((fan / 100.0f) * 54.0f);
   if (fanWidth > 0) {
-    display.fillRect(70, 69, fanWidth, 2, SSD1327_WHITE);
+    display.fillRect(70, 69, fanWidth, 2, SH110X_WHITE);
   }
 
   // Divider 2
-  display.drawLine(0, 78, 127, 78, SSD1327_WHITE);
+  display.drawLine(0, 78, 127, 78, SH110X_WHITE);
 
   // --- Environmental / Extra Sensor Row ---
   display.setCursor(0, 84);
@@ -133,9 +140,7 @@ static void updateDisplay(Control *control) {
   display.display();
 }
 
-// The full-screen I2C transfer takes ~200ms, so it runs in its own task
-// rather than blocking loop(). Wire's HAL locks serialize bus access with
-// the MLX90614 reads made from loop().
+// The full-screen I2C transfer takes ~40ms on SH1107 (2KB buffer), runs in its own task.
 static void displayTask(void *arg) {
   Control *control = static_cast<Control *>(arg);
   for (;;) {
