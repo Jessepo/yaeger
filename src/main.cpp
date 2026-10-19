@@ -113,6 +113,7 @@ void setup() {
 
   server.begin();
   log("HTTP server started");
+  startDisplayTask(control);
   pixels.clear();
   pixels.setPixelColor(0, Adafruit_NeoPixel::Color(0, 5, 0));
   pixels.show();
@@ -124,7 +125,6 @@ void loop() {
   delay(10);
   control->loop();
   wsHandler->loop();
-  updateDisplay(control);
   updateLeds(control);
 
   // Handle tuning commands from USB Serial (crack-tuner.html or terminal).

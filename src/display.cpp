@@ -43,11 +43,7 @@ void setWifiIP() {
   delay(3000); // Show IP for 3 seconds before switching to main display
 }
 
-void updateDisplay(Control *control) {
-  static unsigned long lastUpdate = 0;
-  if (millis() - lastUpdate < 500) return;
-  lastUpdate = millis();
-
+static void updateDisplay(Control *control) {
   display.clearDisplay();
   display.setTextColor(SSD1327_WHITE);
 
@@ -74,7 +70,7 @@ void updateDisplay(Control *control) {
 
   display.setTextSize(1);
   display.setCursor(0, 52);
-  display.print("Heater: ");
+  display.print("Heat: ");
   display.print(heater, 0);
   display.print("%");
 
@@ -86,7 +82,7 @@ void updateDisplay(Control *control) {
   }
 
   display.setCursor(0, 66);
-  display.print("Fan:    ");
+  display.print("Fan:  ");
   display.print(fan, 0);
   display.print("%");
 
@@ -102,9 +98,10 @@ void updateDisplay(Control *control) {
 
   // --- Environmental / Extra Sensor Row ---
   display.setCursor(0, 84);
-  if (control->getIRObjectTemp() > 0.0f) {
+  float irTemp = control->getIRObjectTemp();
+  if (irTemp > 0.0f) {
     display.print("IR:  ");
-    display.print(control->getIRObjectTemp(), 1);
+    display.print(irTemp, 1);
     display.print(" C");
   } else if (control->getDHTTemperature() > 0.0f) {
     display.print("Amb: ");
@@ -123,6 +120,9 @@ void updateDisplay(Control *control) {
   if (WiFi.isConnected()) {
     display.print("IP:  ");
     display.print(WiFi.localIP());
+  } else if (WiFi.getMode() == WIFI_AP) {
+    display.print("AP:  ");
+    display.print(WiFi.softAPIP());
   } else {
     display.print("WiFi: Disconnected");
   }
@@ -131,4 +131,27 @@ void updateDisplay(Control *control) {
   display.print("Yaeger Roaster");
 
   display.display();
+}
+
+// The full-screen I2C transfer takes ~200ms, so it runs in its own task
+// rather than blocking loop(). Wire's HAL locks serialize bus access with
+// the MLX90614 reads made from loop().
+static void displayTask(void *arg) {
+  Control *control = static_cast<Control *>(arg);
+  for (;;) {
+    updateDisplay(control);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}
+
+void startDisplayTask(Control *control) {
+  xTaskCreatePinnedToCore(
+    displayTask,
+    "Display",
+    4096,
+    control,
+    1,
+    nullptr,
+    1 // Pin to Core 1, same as loop()
+  );
 }

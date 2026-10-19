@@ -5,5 +5,5 @@ class Control;
 
 void initDisplay();
 void setWifiIP();
-void updateDisplay(Control *control);
+void startDisplayTask(Control *control);
 #endif // DISPLAY_H
