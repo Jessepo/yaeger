@@ -20,7 +20,7 @@ static bool displayReady = false;
 // pull-ups still work; if the OLED shows up here but begin() fails at
 // 400kHz, suspect missing pull-up resistors.
 // Set to 0 to disable, or delete this block and the #if in initDisplay().
-#define I2C_SCAN_ON_BOOT 1
+#define I2C_SCAN_ON_BOOT 0
 
 #if I2C_SCAN_ON_BOOT
 static void scanI2C() {

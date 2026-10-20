@@ -19,6 +19,7 @@ private:
   float _value;
   float _filteredValue;
   float _ambient;
+  uint8_t _lastFault = 0; // Last logged fault code, so faults log once, not every read
 
 
 
