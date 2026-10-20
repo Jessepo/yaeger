@@ -16,8 +16,37 @@
 static Adafruit_SH1107 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 static bool displayReady = false;
 
+// TEMP diagnostic: list every I2C address that ACKs. Runs at 100kHz so weak
+// pull-ups still work; if the OLED shows up here but begin() fails at
+// 400kHz, suspect missing pull-up resistors.
+// Set to 0 to disable, or delete this block and the #if in initDisplay().
+#define I2C_SCAN_ON_BOOT 1
+
+#if I2C_SCAN_ON_BOOT
+static void scanI2C() {
+  // USB CDC drops output sent before the monitor connects; wait up to 3s.
+  unsigned long start = millis();
+  while (!Serial && millis() - start < 3000) delay(10);
+
+  Serial.printf("I2C scan on SDA=%d SCL=%d...\n", DISPLAY_DA, DISPLAY_CL);
+  int found = 0;
+  for (uint8_t addr = 1; addr < 127; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      Serial.printf("  found device at 0x%02X\n", addr);
+      found++;
+    }
+  }
+  Serial.printf("I2C scan done, %d device(s) found\n", found);
+}
+#endif
+
 void initDisplay() {
   Wire.begin(DISPLAY_DA, DISPLAY_CL);
+#if I2C_SCAN_ON_BOOT
+  Wire.setClock(100000);
+  scanI2C();
+#endif
   Wire.setClock(400000); // 400kHz Fast I2C
   delay(100);
 
@@ -30,6 +59,7 @@ void initDisplay() {
     }
   }
   displayReady = true;
+  Serial.println("SH1107 initialized");
   display.clearDisplay();
   display.display();
 }
