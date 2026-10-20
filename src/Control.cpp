@@ -8,7 +8,9 @@ Control::Control(bool fanSsrMode)
     _fanPin(FAN_PIN),
     _fanSsrMode(fanSsrMode),
     _ssrFanOn(false),
-    _heater(HEATER_PIN, HEATER_FREQUENCY, 10, 1),
+    // 12-bit: 50Hz is below the ~76Hz minimum at 10-bit on an 80MHz clock.
+    // Channel 2 uses LEDC timer 1; channel 1 would share timer 0 with the fan.
+    _heater(HEATER_PIN, HEATER_FREQUENCY, 12, 2),
     _etSensor(MAX1CLK, MAX1CS, MAX1DO, "Exhaust"),
     _btSensor(MAX2CLK, MAX2CS, MAX2DO, "Bean"),
     _ir(),
