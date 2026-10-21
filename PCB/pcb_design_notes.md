@@ -158,8 +158,6 @@ The v1 GPIO table above is superseded by the v2 schematic (`SCH_yaeger_2_2026-09
 
 | GPIO | Signal | Notes |
 |------|--------|-------|
-| 1 | EXP header | Spare (unassigned); ADC1, usable with WiFi |
-| 2 | EXP header | Spare (unassigned); ADC1, usable with WiFi |
 | 4 | ARGB data | WS2812B status LED |
 | 5 | SPI MISO | Shared by both MAX31855s |
 | 6 | SPI CLK | Shared by both MAX31855s |
@@ -171,13 +169,10 @@ The v1 GPIO table above is superseded by the v2 schematic (`SCH_yaeger_2_2026-09
 | 15 | ET /CS | MAX31855 — exhaust/inlet thermocouple |
 | 16 | BT /CS | MAX31855 — bean thermocouple |
 | 17 | I2S_MIC_WS | INMP441 / ICS-43434 MEMS mic word select |
-| 18 | EXP header | Spare (unassigned) |
-| 21 | EXP header | Spare (unassigned) |
 | 41 | I2C SDA | MLX90614 IR probe (0x5A) + SSD1306 OLED (0x3C) |
 | 42 | I2C SCL | MLX90614 + SSD1306 shared bus |
 | 43 | USB CDC TX | Debug serial (native USB) |
 | 44 | USB CDC RX | Debug serial |
-| 47 | EXP header | Spare (unassigned) |
 | 48 | Onboard NeoPixel | DevKit status LED |
 
 ### WebSocket data channels

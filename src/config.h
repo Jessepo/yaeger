@@ -21,7 +21,7 @@
 
 #define DEBUG false
 
-// DHT22 ambient sensor
+// DHT22 inlet temp (IT) + humidity sensor
 #define DHT_PIN 7
 #define DHT_TYPE DHT22
 

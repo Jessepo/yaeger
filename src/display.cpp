@@ -141,7 +141,7 @@ static void updateDisplay(Control *control) {
     display.print(irTemp, 1);
     display.print(" C");
   } else if (control->getDHTTemperature() > 0.0f) {
-    display.print("Amb: ");
+    display.print("IT:  ");
     display.print(control->getDHTTemperature(), 1);
     display.print("C  ");
     display.print(control->getDHTHumidity(), 0);
