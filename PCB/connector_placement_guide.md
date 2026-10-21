@@ -90,7 +90,7 @@ In a mixed-signal coffee roaster controller, layout success depends on **zoning 
 1. **OLED Pinout Swap Hazard:**
    - In the schematic (`SCH_yaeger_2_2026-09-27.pdf`), the OLED connector order is:
      `Pin 1: VCC | Pin 2: GND | Pin 3: SCL | Pin 4: SDA`
-   - Common 0.96" SSD1306 breakout boards come in two conflicting pinouts: `VCC-GND-SCL-SDA` and `GND-VCC-SCL-SDA`. Always check the silkscreen on your physical display module before crimping the JST harness to avoid reverse-biasing the module.
+   - OLED and GY-906 (MLX90614) modules commonly use `VCC-GND-SCL-SDA`, which this board matches (straight-through cables), but some modules swap to `GND-VCC-SCL-SDA`. Always check the silkscreen on your physical module before crimping the JST harness to avoid reverse-biasing it.
 2. **Preventing Accidental Misplugs:**
    - SSR is 2-pin, mic is 6-pin, and the I2C connectors (IRTemp, OLED, EXP) are 4-pin with identical pinouts, so they are interchangeable by design.
    - `FAN`, `AUX`, `ARGB`, and `DHT22` are all 3-pin JST-PH and can be cross-plugged. `FAN`, `AUX`, and `ARGB` share the same 5V / signal / GND pinout, so swapping them is harmless. Plugging a 5V device into `DHT22` (3.3V, GPIO 7) is the risky case; R2 (1kΩ series) limits the current into GPIO 7. Label these clearly on the silkscreen.

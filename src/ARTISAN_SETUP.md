@@ -23,8 +23,8 @@ push crack events back to Artisan unprompted.
 | 16   | MAX2CS   | BT thermocouple chip select (bean) |
 | 17   | I2S_MIC_WS | Mic word select (I2S WS) |
 | 18   | AUX_PIN  | Spare 5V output (not used by firmware yet) |
-| 41   | I2C SDA  | OLED SSD1306 + MLX90614 IR probe |
-| 42   | I2C SCL  | OLED SSD1306 + MLX90614 IR probe |
+| 41   | I2C SDA  | OLED SH1107 + MLX90614 IR probe |
+| 42   | I2C SCL  | OLED SH1107 + MLX90614 IR probe |
 | 43   | USB CDC TX | Upload / serial monitor |
 | 44   | USB CDC RX | Upload / serial monitor |
 | 48   | NeoPixel | Onboard status pixel (red = booting/crack, green = ready) |

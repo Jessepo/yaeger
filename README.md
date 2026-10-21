@@ -8,7 +8,7 @@ ESP32-S3 coffee roaster controller. Artisan drives the roast via WebSocket; the 
 Artisan (PC) ──WebSocket──► ESP32-S3 (Dual-Core 240 MHz)
                               ├─ Core 1: Roaster Control & Web Loop
                               │    ──SPI──► MAX31855 (ET, BT thermocouples)
-                              │    ──I2C──► MLX90614 IR probe + SSD1306 OLED
+                              │    ──I2C──► MLX90614 IR probe + SH1107 OLED
                               │    ──PWM──► Heater SSR + Fan
                               │    ──1-Wire► Optional DHT22 sensor
                               │
@@ -38,8 +38,8 @@ The firmware does not own profiles or PID loops. Artisan controls burner and fan
 | 16 | BT CS | MAX31855 bean thermocouple chip select |
 | 17 | I2S_MIC_WS | INMP441 / ICS-43434 MEMS mic word select |
 | 18 | AUX | Spare 5V output (relay module etc.), not used by firmware yet |
-| 41 | I2C SDA | MLX90614 IR probe + SSD1306 OLED |
-| 42 | I2C SCL | MLX90614 IR probe + SSD1306 OLED |
+| 41 | I2C SDA | MLX90614 IR probe + SH1107 OLED |
+| 42 | I2C SCL | MLX90614 IR probe + SH1107 OLED |
 | 43 | USB CDC TX | Upload / serial monitor |
 | 44 | USB CDC RX | Upload / serial monitor |
 | 48 | Onboard NeoPixel | Status indicator (boot, ready, mic hit/crack detection) |
@@ -82,13 +82,13 @@ The **BT Source** setting in Device Settings lets you choose which sensor Artisa
 | SDA | GPIO 41 |
 | SCL | GPIO 42 |
 
-The SSD1306 OLED shares the same I2C bus (address 0x3C). The MLX90614 is at address 0x5A.
+The SH1107 OLED shares the same I2C bus (address 0x3C, falls back to 0x3D). The MLX90614 is at address 0x5A.
 
 ---
 
-## OLED Display (SSD1306)
+## OLED Display (SH1107)
 
-128×64 I2C OLED on GPIO 41/42 (shared with MLX90614). Shows ET, BT, fan, and heater values. Address: 0x3C.
+128×128 I2C OLED on GPIO 41/42 (shared with MLX90614). Shows ET, BT, heater and fan, then IR temp — or IT (DHT22 inlet temp + RH) if no IR sensor, or board ambient if neither — plus network status. Address: 0x3C (falls back to 0x3D).
 
 ---
 
