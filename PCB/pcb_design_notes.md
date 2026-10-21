@@ -158,20 +158,26 @@ The v1 GPIO table above is superseded by the v2 schematic (`SCH_yaeger_2_2026-09
 
 | GPIO | Signal | Notes |
 |------|--------|-------|
-| 3 | Heater PWM | 50 Hz SSR control (`HEATER_FREQUENCY`), capped at `MAX_HEATER_POWER` = 65% |
+| 1 | EXP header | Spare (unassigned); ADC1, usable with WiFi |
+| 2 | EXP header | Spare (unassigned); ADC1, usable with WiFi |
 | 4 | ARGB data | WS2812B status LED |
 | 5 | SPI MISO | Shared by both MAX31855s |
 | 6 | SPI CLK | Shared by both MAX31855s |
 | 7 | DHT22 data | Ambient temperature + humidity (CH5 / RH); optional — firmware detects presence at boot |
 | 8 | Fan PWM | 20 kHz (`FAN_FREQUENCY`); level-shifted to 5V via 74AHCT1G125 |
+| 9 | Heater PWM | 50 Hz SSR control (`HEATER_FREQUENCY`), capped at `MAX_HEATER_POWER` = 65% |
+| 13 | I2S_MIC_SD | INMP441 / ICS-43434 MEMS mic serial data |
+| 14 | I2S_MIC_SCK | INMP441 / ICS-43434 MEMS mic bit clock |
 | 15 | ET /CS | MAX31855 — exhaust/inlet thermocouple |
 | 16 | BT /CS | MAX31855 — bean thermocouple |
-| 17 | UART RX (Serial2) | Receives CRACK events from crack listener board |
-| 18 | UART TX (Serial2) | Crack listener TX — not currently used by listener firmware |
+| 17 | I2S_MIC_WS | INMP441 / ICS-43434 MEMS mic word select |
+| 18 | EXP header | Spare (unassigned) |
+| 21 | EXP header | Spare (unassigned) |
 | 41 | I2C SDA | MLX90614 IR probe (0x5A) + SSD1306 OLED (0x3C) |
 | 42 | I2C SCL | MLX90614 + SSD1306 shared bus |
 | 43 | USB CDC TX | Debug serial (native USB) |
 | 44 | USB CDC RX | Debug serial |
+| 47 | EXP header | Spare (unassigned) |
 | 48 | Onboard NeoPixel | DevKit status LED |
 
 ### WebSocket data channels

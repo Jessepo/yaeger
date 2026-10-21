@@ -29,7 +29,7 @@ In a mixed-signal coffee roaster controller, layout success depends on **zoning 
  │  • 5V + GND                                                     • 3.3V + GND + L/R        │
  │                                        ┌──────────────┐                                   │
  │ [ SSR ] (JST-PH 4p/2p)                 │   ESP32-S3   │        [ IRTemp MLX ] (JST-PH 4p) │
- │  • GPIO 3 (50 Hz PWM 3.3V)             │   DevKit     │         • I2C: GPIO 41 & 42       │
+ │  • GPIO 9 (50 Hz PWM 3.3V)             │   DevKit     │         • I2C: GPIO 41 & 42       │
  │  • GND                                 └──────────────┘         • 3.3V + GND              │
  │                                                                                           │
  │                                                                 [ DHT22 ] (JST-PH 4p/3p)  │
@@ -53,12 +53,13 @@ In a mixed-signal coffee roaster controller, layout success depends on **zoning 
 | **ET (Exhaust)** | Screw Terminal (3.81/5.08mm) | 2-pin | T+, T- (`MAX1CS` = GPIO 15, `CLK` = 6, `DO` = 5) | Passive (µV) | Exhaust / Inlet thermocouple probe |
 | **BT (Bean)** | Screw Terminal (3.81/5.08mm) | 2-pin | T+, T- (`MAX2CS` = GPIO 16, `CLK` = 6, `DO` = 5) | Passive (µV) | Bean drum thermocouple probe |
 | **FAN** | JST-PH 4-pin | 1: NC<br>2: +5V<br>3: GND<br>4: PWM | `FAN_PIN` = GPIO 8 (level-shifted to 5V via 74AHCT1G125) | 5V | Blower / Fan motor controller |
-| **SSR** | JST-PH 4-pin (or 2-pin) | 1: NC<br>2: NC<br>3: Signal (+)<br>4: GND (-) | `HEATER_PIN` = GPIO 3 (50 Hz SSR drive) | 3.3V Logic | Crydom D2425-01 SSR control input |
+| **SSR** | JST-PH 4-pin (or 2-pin) | 1: NC<br>2: NC<br>3: Signal (+)<br>4: GND (-) | `HEATER_PIN` = GPIO 9 (50 Hz SSR drive) | 3.3V Logic | Crydom D2425-01 SSR control input |
 | **Crack** | JST-PH 6-pin | 1: VDD (3.3V)<br>2: GND<br>3: L/R (GND)<br>4: WS<br>5: SCK<br>6: SD | `I2S_MIC_WS_PIN` = 17<br>`I2S_MIC_SCK_PIN` = 14<br>`I2S_MIC_SD_PIN` = 13 | 3.3V | INMP441 / ICS-43434 acoustic mic probe |
 | **IRTemp** | JST-PH 4-pin | 1: 3.3V<br>2: SDA<br>3: SCL<br>4: GND | `DISPLAY_DA` = GPIO 41<br>`DISPLAY_CL` = GPIO 42 | 3.3V | MLX90614 infrared bean drum sensor |
 | **DHT22** | JST-PH 4-pin (or 3-pin) | 1: 3.3V<br>2: DATA<br>3: NC<br>4: GND | `DHT_PIN` = GPIO 7 | 3.3V | Ambient roaster room intake sensor |
 | **OLED** | JST-PH 4-pin | 1: 3.3V<br>2: GND<br>3: SCL<br>4: SDA | `DISPLAY_CL` = GPIO 42<br>`DISPLAY_DA` = GPIO 41 | 3.3V | 0.96" SSD1306 front-panel display |
 | **ARGB** | JST-PH 4-pin (or 3-pin) | 1: +5V<br>2: DIN<br>3: NC<br>4: GND | `ARGB_PIN` = GPIO 4 | 5V Rail | Front-panel WS2812B ring / status LED |
+| **EXP** | 9-pin header | 1: GPIO 1<br>2: GPIO 2<br>3: GPIO 18<br>4: GPIO 21<br>5: GPIO 47<br>6: 3.3V<br>7: 5V<br>8: GND<br>9: GND | Spare (unassigned). GPIO 1/2 are ADC1 (usable with WiFi) | 3.3V Logic | Future relays / cooler fan / actuators — drive via transistor or ULN2003, 10k pull-downs |
 | **USB-C** | Type-C Receptacle | Edge mount | USB D+ (GPIO 20), D- (GPIO 19), VBUS, GND | 5V Input | Enclosure exterior port |
 
 ---

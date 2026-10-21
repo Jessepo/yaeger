@@ -12,11 +12,11 @@ push crack events back to Artisan unprompted.
 
 | GPIO | Signal | Connected to |
 |-----:|--------|--------------|
-| 3    | HEATER_PIN | AC SSR input (50 Hz PWM, ≤ 65 % duty) |
 | 4    | ARGB_PIN | WS2812 LED strip — 8 pixels |
 | 5    | SPI MISO | MAX31855 × 2 (shared data line) |
 | 6    | SPI CLK  | MAX31855 × 2 (shared clock) |
 | 8    | FAN_PIN  | Fan driver — PWM 20 kHz or SSR digital |
+| 9    | HEATER_PIN | AC SSR input (50 Hz PWM, ≤ 65 % duty) |
 | 13   | I2S_MIC_SD | INMP441 / ICS-43434 mic data |
 | 14   | I2S_MIC_SCK | Mic bit clock |
 | 15   | MAX1CS   | ET thermocouple chip select (exhaust) |

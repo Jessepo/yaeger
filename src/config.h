@@ -2,7 +2,7 @@
 
 #define FAN_PIN 8
 
-#define HEATER_PIN 3
+#define HEATER_PIN 9
 
 // temp sensor pins
 

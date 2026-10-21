@@ -26,12 +26,12 @@ The firmware does not own profiles or PID loops. Artisan controls burner and fan
 
 | GPIO | Function | Notes |
 |------|----------|-------|
-| 3 | Heater PWM | 50 Hz SSR signal |
 | 4 | ARGB data | WS2812 status LED |
 | 5 | SPI MISO | Shared thermocouple bus |
 | 6 | SPI CLK | Shared thermocouple bus |
 | 7 | DHT22 data | Optional ambient humidity/temperature sensor |
 | 8 | Fan PWM | 20 kHz |
+| 9 | Heater PWM | 50 Hz SSR signal |
 | 13 | I2S_MIC_SD | INMP441 / ICS-43434 MEMS mic serial data |
 | 14 | I2S_MIC_SCK | INMP441 / ICS-43434 MEMS mic bit clock |
 | 15 | ET CS | MAX31855 exhaust/inlet air thermocouple chip select |
