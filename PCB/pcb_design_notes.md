@@ -86,16 +86,16 @@ routing
 
 ## 3. 5V Output Buffer — SN74AHCT125DR (FAN, SSR, AUX, ARGB)
 
-One quad buffer level-shifts all 3.3V outputs to 5V. AHCT inputs accept 3.3V logic (VIH = 2.0V).
+One quad buffer level-shifts all 3.3V outputs to 5V. U2, RN1, R1, R2 and the bypass cap sit under the DevKit (keep the antenna end clear). AHCT inputs accept 3.3V logic (VIH = 2.0V).
 
 ### IC Pinout (SOIC-14)
 | Pin | Name | Connect to |
 |-----|------|-----------|
 | 1, 4, 10, 13 | 1OE#–4OE# | GND (always enabled) |
-| 2 → 3 | 1A → 1Y | `FAN` (GPIO 8) → `FAN5V` |
-| 5 → 6 | 2A → 2Y | `AUX` (GPIO 18) → `AUX5V` |
-| 9 → 8 | 3A → 3Y | `SSR` (GPIO 9) → `SSR5V` |
-| 12 → 11 | 4A → 4Y | `ARGB` (GPIO 4) → R1 330Ω → `ARGB5V` |
+| 2 → 3 | 1A → 1Y | `SSR` (GPIO 9) → `SSR5V` |
+| 5 → 6 | 2A → 2Y | `FAN` (GPIO 8) → `FAN5V` |
+| 9 → 8 | 3A → 3Y | `ARGB` (GPIO 4) → R1 330Ω → `ARGB5V` |
+| 12 → 11 | 4A → 4Y | `AUX` (GPIO 18) → `AUX5V` |
 | 7 | GND | GND |
 | 14 | VCC | Board 5V rail, 100nF bypass placed directly across pins 14/7 |
 
