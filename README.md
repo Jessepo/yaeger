@@ -37,6 +37,7 @@ The firmware does not own profiles or PID loops. Artisan controls burner and fan
 | 15 | ET CS | MAX31855 exhaust/inlet air thermocouple chip select |
 | 16 | BT CS | MAX31855 bean thermocouple chip select |
 | 17 | I2S_MIC_WS | INMP441 / ICS-43434 MEMS mic word select |
+| 18 | AUX | Spare 5V output (relay module etc.), not used by firmware yet |
 | 41 | I2C SDA | MLX90614 IR probe + SSD1306 OLED |
 | 42 | I2C SCL | MLX90614 IR probe + SSD1306 OLED |
 | 43 | USB CDC TX | Upload / serial monitor |

@@ -84,55 +84,48 @@ routing
 
 ---
 
-## 3. PWM Level Shifter — 74AHCT1G125 (Motor Controller)
+## 3. 5V Output Buffer — SN74AHCT125DR (FAN, SSR, AUX, ARGB)
 
-### IC Pinout (SOT-353)
+One quad buffer level-shifts all 3.3V outputs to 5V. AHCT inputs accept 3.3V logic (VIH = 2.0V).
+
+### IC Pinout (SOIC-14)
 | Pin | Name | Connect to |
 |-----|------|-----------|
-| 1 | OE# | GND (always enabled) |
-| 2 | A | ESP32 GPIO (PWM, 3.3V) |
-| 3 | GND | GND |
-| 4 | Y | PWM output → motor controller connector pin 3 |
-| 5 | VCC | Board 5V rail |
+| 1, 4, 10, 13 | 1OE#–4OE# | GND (always enabled) |
+| 2 → 3 | 1A → 1Y | `FAN` (GPIO 8) → `FAN5V` |
+| 5 → 6 | 2A → 2Y | `AUX` (GPIO 18) → `AUX5V` |
+| 9 → 8 | 3A → 3Y | `SSR` (GPIO 9) → `SSR5V` |
+| 12 → 11 | 4A → 4Y | `ARGB` (GPIO 4) → R1 330Ω → `ARGB5V` |
+| 7 | GND | GND |
+| 14 | VCC | Board 5V rail, 100nF bypass placed directly across pins 14/7 |
 
-### Connector — FAN (HC-HY-4A, 2.00mm pitch)
-| Pin | Connect to |
-|-----|-----------|
-| 1 | NC |
-| 2 | Motor controller 5V (+ solder jumper to board 5V) |
-| 3 | GND |
-| 4 | PWM output (from 74AHCT1G125 pin 4) |
+- RN1 (10k ×4) pulls all four inputs to GND so outputs stay low while the ESP32 boots (SSR and fan off).
+- AUX: use a **high-level trigger** relay module; active-low modules would switch on at boot. The buffer cannot drive a bare relay coil.
 
-### Solder Jumper
+### Connectors
+| Connector | Pins |
+|-----------|------|
+| FAN (PH-3) | 1: +5V via JP1, 2: `FAN5V`, 3: GND |
+| AUX (PH-3) | 1: +5V, 2: `AUX5V`, 3: GND |
+| ARGB (PH-3) | 1: +5V, 2: `ARGB5V`, 3: GND |
+| SSR (PH-2) | 1: GND → SSR input-, 2: `SSR5V` → SSR input+ |
+
+### Solder Jumper (JP1, FAN only)
 - **Open (default):** motor controller supplies its own 5V to the connector
 - **Closed:** board 5V rail feeds the motor controller via connector
-- Level shifter VCC is always powered from board 5V regardless of jumper state
+- Buffer VCC is always powered from board 5V regardless of jumper state
 
 ### BOM
 | Ref | Component | Value | Package | LCSC # |
 |-----|-----------|-------|---------|--------|
-| U2 | 74AHCT1G125GW | Single buffer, 3.3V→5V | SOT-353 | C12381 |
-| C_U2 | Capacitor — VCC bypass | 100nF | 0603 | C14663 |
-| J_5V | Solder jumper | 2-pad | — | — |
-| FAN | Connector | HC-HY-4A, 4-pin 2.00mm | THT | — |
+| U2 | SN74AHCT125DR | Quad buffer, 3.3V→5V | SOIC-14 | C155176 |
+| U10_3 | Capacitor — VCC bypass | 100nF | 0603 | C14663 |
+| RN1 | Resistor array — input pull-downs | 10k ×4 | 0603×4 | C29718 |
+| R1 | ARGB series resistor | 330Ω | — | — |
+| JP1 | Solder jumper | 2-pad | — | — |
 
----
-
-## 4. SSR Heater Control — Crydom D2425-01
-
-- Input voltage: 3-32V DC — **ESP32 3.3V GPIO drives it directly, no level shifting needed**
-- No series resistor needed (would drop below 3V turn-on threshold)
-- Wire GPIO directly to SSR input+, GND to SSR input-
-
-### Connector — SSR (HC-HY-4A, 2.00mm pitch)
-| Pin | Connect to |
-|-----|-----------|
-| 1 | NC |
-| 2 | NC |
-| 3 | ESP32 GPIO → SSR input+ |
-| 4 | GND → SSR input- |
-
-### PCB Note
+### SSR (Crydom D2425-01) PCB Note
+- Input 3-32V DC; driven at 5V through the buffer for margin over the ~3V turn-on threshold
 - Keep SSR connector physically separated from logic connectors
 - Add silkscreen warning if mains voltage is present anywhere near the board
 
@@ -161,14 +154,15 @@ The v1 GPIO table above is superseded by the v2 schematic (`SCH_yaeger_2_2026-09
 | 4 | ARGB data | WS2812B status LED |
 | 5 | SPI MISO | Shared by both MAX31855s |
 | 6 | SPI CLK | Shared by both MAX31855s |
-| 7 | DHT22 data | Ambient temperature + humidity (CH5 / RH); optional — firmware detects presence at boot |
-| 8 | Fan PWM | 20 kHz (`FAN_FREQUENCY`); level-shifted to 5V via 74AHCT1G125 |
-| 9 | Heater PWM | 50 Hz SSR control (`HEATER_FREQUENCY`), capped at `MAX_HEATER_POWER` = 65% |
+| 7 | DHT22 data | Inlet temp (IT, CH5) + humidity (RH) via 1k series R2; optional — firmware detects presence at boot |
+| 8 | Fan PWM | 20 kHz (`FAN_FREQUENCY`); level-shifted to 5V via U2 (74AHCT125) |
+| 9 | Heater PWM | 50 Hz SSR control (`HEATER_FREQUENCY`), capped at `MAX_HEATER_POWER` = 65%; level-shifted to 5V via U2 |
 | 13 | I2S_MIC_SD | INMP441 / ICS-43434 MEMS mic serial data |
 | 14 | I2S_MIC_SCK | INMP441 / ICS-43434 MEMS mic bit clock |
 | 15 | ET /CS | MAX31855 — exhaust/inlet thermocouple |
 | 16 | BT /CS | MAX31855 — bean thermocouple |
 | 17 | I2S_MIC_WS | INMP441 / ICS-43434 MEMS mic word select |
+| 18 | AUX | Spare 5V output via U2 (relay module etc.); not used by firmware yet |
 | 41 | I2C SDA | MLX90614 IR probe (0x5A) + SSD1306 OLED (0x3C) |
 | 42 | I2C SCL | MLX90614 + SSD1306 shared bus |
 | 43 | USB CDC TX | Debug serial (native USB) |
@@ -189,7 +183,7 @@ Optional sensors return `0` when absent — Artisan will receive 0°C for those 
 
 ### PWM parameters
 - **Heater:** 50 Hz, software-limited to 65% duty max (`MAX_HEATER_POWER`). Safety interlock: output forced to 0 if fan is off.
-- **Fan:** 20 kHz. Level-shifted 3.3V→5V via 74AHCT1G125 before the fan controller connector.
+- **Fan:** 20 kHz. Level-shifted 3.3V→5V via U2 (74AHCT125) before the fan controller connector.
 
 ### NVS-stored preferences
 | Key | Type | Default | Description |

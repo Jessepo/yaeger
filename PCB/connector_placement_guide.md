@@ -24,11 +24,11 @@ In a mixed-signal coffee roaster controller, layout success depends on **zoning 
  │ ZONE 2: ACTUATORS / NOISE                                      ZONE 3: ROASTER SENSORS    │
  │ (High switching current)                                       (Chassis & Drum probes)    │
  │                                                                                           │
- │ [ FAN ] (JST-PH 4p)                                            [ Crack Mic ] (JST-PH 6p)  │
+ │ [ FAN ] (JST-PH 3p)                                            [ Crack Mic ] (JST-PH 6p)  │
  │  • GPIO 8 (20 kHz PWM 5V)                                       • I2S: GPIO 13, 14, 17    │
  │  • 5V + GND                                                     • 3.3V + GND + L/R        │
  │                                        ┌──────────────┐                                   │
- │ [ SSR ] (JST-PH 4p/2p)                 │   ESP32-S3   │        [ IRTemp MLX ] (JST-PH 4p) │
+ │ [ SSR ] (JST-PH 2p)                    │   ESP32-S3   │        [ IRTemp MLX ] (JST-PH 4p) │
  │  • GPIO 9 (50 Hz PWM 3.3V)             │   DevKit     │         • I2C: GPIO 41 & 42       │
  │  • GND                                 └──────────────┘         • 3.3V + GND              │
  │                                                                                           │
@@ -52,13 +52,14 @@ In a mixed-signal coffee roaster controller, layout success depends on **zoning 
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **ET (Exhaust)** | Screw Terminal (3.81/5.08mm) | 2-pin | T+, T- (`MAX1CS` = GPIO 15, `CLK` = 6, `DO` = 5) | Passive (µV) | Exhaust / Inlet thermocouple probe |
 | **BT (Bean)** | Screw Terminal (3.81/5.08mm) | 2-pin | T+, T- (`MAX2CS` = GPIO 16, `CLK` = 6, `DO` = 5) | Passive (µV) | Bean drum thermocouple probe |
-| **FAN** | JST-PH 4-pin | 1: NC<br>2: +5V<br>3: GND<br>4: PWM | `FAN_PIN` = GPIO 8 (level-shifted to 5V via 74AHCT1G125) | 5V | Blower / Fan motor controller |
-| **SSR** | JST-PH 4-pin (or 2-pin) | 1: NC<br>2: NC<br>3: Signal (+)<br>4: GND (-) | `HEATER_PIN` = GPIO 9 (50 Hz SSR drive) | 3.3V Logic | Crydom D2425-01 SSR control input |
+| **FAN** | JST-PH 3-pin | 1: +5V (via JP1)<br>2: PWM<br>3: GND | `FAN_PIN` = GPIO 8 (level-shifted to 5V via 74AHCT125) | 5V | Blower / Fan motor controller |
+| **SSR** | JST-PH 2-pin | 1: GND (-)<br>2: Signal (+) | `HEATER_PIN` = GPIO 9 (50 Hz SSR drive, level-shifted to 5V via 74AHCT125) | 5V Logic | Crydom D2425-01 SSR control input |
 | **Crack** | JST-PH 6-pin | 1: VDD (3.3V)<br>2: WS<br>3: SCK<br>4: SD<br>5: L/R (GND)<br>6: GND | `I2S_MIC_WS_PIN` = 17<br>`I2S_MIC_SCK_PIN` = 14<br>`I2S_MIC_SD_PIN` = 13 | 3.3V | INMP441 / ICS-43434 acoustic mic probe |
 | **IRTemp** | JST-PH 4-pin | 1: 3.3V<br>2: GND<br>3: SCL<br>4: SDA | `DISPLAY_CL` = GPIO 42<br>`DISPLAY_DA` = GPIO 41 | 3.3V | MLX90614 infrared bean drum sensor |
-| **DHT22** | JST-PH 3-pin | 1: 3.3V<br>2: DATA<br>3: GND | `DHT_PIN` = GPIO 7 | 3.3V | Inlet air temp (IT) + humidity |
-| **OLED** | JST-PH 4-pin | 1: 3.3V<br>2: GND<br>3: SCL<br>4: SDA | `DISPLAY_CL` = GPIO 42<br>`DISPLAY_DA` = GPIO 41 | 3.3V | 0.96" SSD1306 front-panel display |
-| **ARGB** | JST-PH 4-pin (or 3-pin) | 1: +5V<br>2: DIN<br>3: NC<br>4: GND | `ARGB_PIN` = GPIO 4 | 5V Rail | Front-panel WS2812B ring / status LED |
+| **DHT22** | JST-PH 3-pin | 1: 3.3V<br>2: DATA<br>3: GND | `DHT_PIN` = GPIO 7 (1kΩ series R2) | 3.3V | Inlet air temp (IT) + humidity |
+| **OLED** | JST-PH 4-pin | 1: 3.3V<br>2: GND<br>3: SCL<br>4: SDA | `DISPLAY_CL` = GPIO 42<br>`DISPLAY_DA` = GPIO 41 | 3.3V | 128×128 SH1107 front-panel display |
+| **ARGB** | JST-PH 3-pin | 1: +5V<br>2: DIN<br>3: GND | `ARGB_PIN` = GPIO 4 (level-shifted to 5V via 74AHCT125, 330Ω series) | 5V Rail | Front-panel WS2812B ring / status LED |
+| **AUX** | JST-PH 3-pin | 1: +5V<br>2: AUX5V<br>3: GND | `AUX_PIN` = GPIO 18 (level-shifted to 5V via 74AHCT125) | 5V | Spare output — high-level trigger relay module |
 | **EXP** | JST-PH 4-pin | 1: 3.3V<br>2: GND<br>3: SCL<br>4: SDA | `DISPLAY_CL` = GPIO 42<br>`DISPLAY_DA` = GPIO 41 | 3.3V | I2C expansion (e.g. GPIO expander board for relays / sensors) |
 | **USB-C** | Type-C Receptacle | Edge mount | USB D+ (GPIO 20), D- (GPIO 19), VBUS, GND | 5V Input | Enclosure exterior port |
 
@@ -73,7 +74,7 @@ In a mixed-signal coffee roaster controller, layout success depends on **zoning 
 
 ### Zone 2: Bottom-Left Edge — Power & Actuators (FAN & SSR)
 - **Switching Noise Containment:** The fan PWM (20 kHz) and SSR drive connect to external motor controllers and relays that switch significant inductive or resistive power. Placing their connectors together at the bottom-left isolates their return currents.
-- **Physical Separation:** The SSR plug only outputs low-voltage 3.3V DC logic to the Crydom relay. Ensure the harness runs straight out to the high-voltage/mains compartment where the SSR is mounted to a heatsink.
+- **Physical Separation:** The SSR plug only outputs low-voltage 5V DC logic to the Crydom relay. Ensure the harness runs straight out to the high-voltage/mains compartment where the SSR is mounted to a heatsink.
 
 ### Zone 3: Right Edge — Roaster Sensors (Crack Mic, MLX90614, DHT22)
 - **Acoustic Mic (I2S):** The I2S clock line (`SCK`, GPIO 14) toggles at high speed. Placing the 6-pin `Crack` connector along the right edge minimizes trace length to ESP32 pins 13, 14, and 17.
@@ -91,9 +92,8 @@ In a mixed-signal coffee roaster controller, layout success depends on **zoning 
      `Pin 1: VCC | Pin 2: GND | Pin 3: SCL | Pin 4: SDA`
    - Common 0.96" SSD1306 breakout boards come in two conflicting pinouts: `VCC-GND-SCL-SDA` and `GND-VCC-SCL-SDA`. Always check the silkscreen on your physical display module before crimping the JST harness to avoid reverse-biasing the module.
 2. **Preventing Accidental Misplugs:**
-   - Currently, `FAN`, `SSR`, `DHT22`, and `ARGB` all use 4-pin `HC-HY-4A` connectors with unused/dummy pins.
-   - Accidental cross-plugging (e.g., plugging 5V `ARGB` into 3.3V `DHT22` or `SSR`) can damage pins or sensors.
-   - **Recommended improvement:** Use **2-pin JST-PH for SSR**, **3-pin JST-PH for ARGB and DHT22**, and **4-pin JST-PH for I2C and FAN**. This provides physical keying so cables cannot fit into the wrong socket.
+   - SSR is 2-pin, mic is 6-pin, and the I2C connectors (IRTemp, OLED, EXP) are 4-pin with identical pinouts, so they are interchangeable by design.
+   - `FAN`, `AUX`, `ARGB`, and `DHT22` are all 3-pin JST-PH and can be cross-plugged. `FAN`, `AUX`, and `ARGB` share the same 5V / signal / GND pinout, so swapping them is harmless. Plugging a 5V device into `DHT22` (3.3V, GPIO 7) is the risky case; R2 (1kΩ series) limits the current into GPIO 7. Label these clearly on the silkscreen.
 3. **INMP441 / ICS-43434 6-Pin Sequence:**
    - Standard MEMS microphone breakout boards follow the header order:
      `SCK - SD - WS - L/R - GND - VDD`

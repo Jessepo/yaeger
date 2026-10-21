@@ -4,6 +4,9 @@
 
 #define HEATER_PIN 9
 
+// Spare 5V output (via 74AHCT125), not used yet
+#define AUX_PIN 18
+
 // temp sensor pins
 
 // Exhaust
