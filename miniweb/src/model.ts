@@ -6,17 +6,13 @@ export type YaegerMessage = {
   Amb: number;
   FanVal: number;
   BurnerVal: number;
+  CH3?: number;  // MLX90614 object temp (IR surface)
+  CH4?: number;  // MLX90614 ambient temp
   id: number;
-  Setpoint?: number;
-  Target?: string;
-  Mode?: string;
-  pidKp?: number;
-  pidKi?: number;
-  pidKd?: number;
   wifiStrength?: number;
   type?: string;
-  cooldownFanSpeed?: number;
   fanMode?: string;
+  btSource?: string;
 }
 
 export class YaegerState  {
@@ -24,29 +20,23 @@ export class YaegerState  {
 	currentState: CurrentState =  {
 		status: RoasterStatus.idle
 	};
-	profile?: Profile
 }
 
 export enum RoasterStatus {
 	idle,
-	roasting
+	roasting,
+	cooling,
 }
 
 export type CurrentState = {
-	lastMessage?: YaegerMessage 
+	lastMessage?: YaegerMessage
 	lastUpdate?: Date
-	status: RoasterStatus 
+	status: RoasterStatus
 }
 
 export type Measurement = {
 	timestamp: Date
 	message: YaegerMessage
-	extra?: MeasurementExtra
-}
-
-export type MeasurementExtra = {
-	setpoint: number
-	pidData?: PIDData
 }
 
 export type RoastState = {
@@ -54,7 +44,6 @@ export type RoastState = {
 	measurements: Measurement[] | []
 	events: RoastEvent[] | []
 	commands: RoastCommand[] | []
-	profile?: Profile
 }
 
 export type RoastEvent = {
@@ -68,13 +57,7 @@ export type RoastCommand = {
 	timestamp: Date
 }
 
-export type PIDData = {
-	enabled: boolean
-	kp: number
-	ki: number
-	kd: number
-}
-
+// Kept for chart.ts profile-line drawing and profiling.ts
 export type Profile = {
 	steps: ProfileStep[]
 }
@@ -83,5 +66,5 @@ export type ProfileStep = {
 	interpolation: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out'
 	setpoint: number
 	duration: number
-  fanValue?: number
+	fanValue?: number
 }

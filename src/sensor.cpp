@@ -31,6 +31,10 @@ void Sensor::takeReading() {
   if (isnan(value)) {
     this->handleThermocoupleFault();
   } else {
+    if (this->_lastFault != 0) {
+      logf("Thermocouple on sensor %s recovered\n", this->_sensorName.c_str());
+      this->_lastFault = 0;
+    }
     this->_value = value;
     this->_filteredValue = this->_valueFilter.process(value);
   }
@@ -41,16 +45,20 @@ void Sensor::takeReading() {
 
 void Sensor::handleThermocoupleFault() {
   uint8_t e = this->_tc.readError();
-  logf("Thermocouple fault(s) detected on sensor %s! Error: %d\n", this->_sensorName, e);
+  if (e == this->_lastFault) return;
+  this->_lastFault = e;
+
+  const char *name = this->_sensorName.c_str();
+  logf("Thermocouple fault(s) detected on sensor %s! Error: %d\n", name, e);
 
   if (e & MAX31855_FAULT_OPEN) {
-    logf("FAULT [%s]: Thermocouple is open - no connections.\n", this->_sensorName);
+    logf("FAULT [%s]: Thermocouple is open - no connections.\n", name);
   }
   if (e & MAX31855_FAULT_SHORT_GND) {
-    logf("FAULT [%s]: Thermocouple is short-circuited to GND.\n", this->_sensorName);
+    logf("FAULT [%s]: Thermocouple is short-circuited to GND.\n", name);
   }
   if (e & MAX31855_FAULT_SHORT_VCC) {
-    logf("FAULT [%s]: Thermocouple is short-circuited to VCC.\n", this->_sensorName);
+    logf("FAULT [%s]: Thermocouple is short-circuited to VCC.\n", name);
   }
 }
 

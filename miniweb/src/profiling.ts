@@ -7,11 +7,6 @@ import { sgSmooth, computeSGKernel } from "./chart";
 export const profile = van.state<Profile | undefined>();
 export const followProfileEnabled = van.state(true);
 export const profileName = van.state("");
-// Bumped each time a profile is loaded from an external source (file
-// upload, device load, → Profile from a roast).  Subscribers (roast.ts)
-// use this to trigger a roast reset + auto-enable PID.  Editor edits do
-// NOT bump this — only fresh loads do.
-export const profileLoadTick = van.state(0);
 
 export function followProfile(
   profile: Profile,
@@ -148,8 +143,9 @@ async function loadProfileFromDevice(name: string) {
       return;
     }
     profileName.val = loaded.name ?? name;
-    profile.val = loaded.profile;
-    profileLoadTick.val++;
+    // Dynamic import avoids the profiling↔roast static cycle.
+    const { loadProfile } = await import("./roast");
+    loadProfile(loaded.profile);
   } catch (e) {
     alert(`Error loading profile: ${(e as Error).message}`);
   }
@@ -618,7 +614,7 @@ const UploadProfileInput = () => {
     if (!file) return;
     const reader = new FileReader();
 
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const text = e.target?.result as string;
         const jsonData = JSON.parse(text);
@@ -629,8 +625,8 @@ const UploadProfileInput = () => {
           );
         }
         profileName.val = loaded.name ?? file.name;
-        profile.val = loaded.profile;
-        profileLoadTick.val++;
+        const { loadProfile } = await import("./roast");
+        loadProfile(loaded.profile);
         console.log("Profile loaded:", profileName.val, loaded.profile);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);

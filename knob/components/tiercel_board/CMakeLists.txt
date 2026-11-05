@@ -1,0 +1,22 @@
+idf_component_register(
+    SRCS
+        "src/tiercel_board.c"
+        "src/board_display.c"
+        "src/board_touch.c"
+        "src/board_knob.c"
+        "src/board_haptic.c"
+    INCLUDE_DIRS "include"
+    PRIV_INCLUDE_DIRS "src"
+    REQUIRES
+        esp_driver_i2c
+        esp_lcd
+        lvgl__lvgl
+    PRIV_REQUIRES
+        esp_driver_gpio
+        esp_driver_ledc
+        esp_driver_spi
+        esp_timer
+        espressif__esp_lvgl_port
+        espressif__esp_lcd_st77916
+        espressif__esp_lcd_touch_cst816s
+)

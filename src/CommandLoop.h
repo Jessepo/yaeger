@@ -11,8 +11,10 @@ private:
   AsyncWebSocket *ws;
   unsigned long _lastUpdate;
 
+  void sendEvent(const char *event);
+
 public:
-  WSRequestHandler(AsyncWebSocket *ws,Control *control, Preferences *preferences);
+  WSRequestHandler(AsyncWebSocket *ws, Control *control, Preferences *preferences);
   void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
                  AwsEventType type, void *arg, uint8_t *data, size_t len);
   void loop();

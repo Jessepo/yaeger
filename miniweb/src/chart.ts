@@ -174,8 +174,20 @@ export function initializeChart(el: HTMLElement): ChartInstance {
       icon: "roundRect",
       itemWidth: 14,
       itemHeight: 8,
+      // Explicit list so the raw BT/ET traces stay drawn but don't
+      // chew legend width — they're already visually distinguishable
+      // as faint background lines behind the smoothed BT/ET.
+      data: [
+        "BT",
+        "ET",
+        "BT ROR",
+        "Setpoint",
+        "Profile BT",
+        "Profile Fan",
+        "Burner",
+      ],
     },
-    grid: { left: 52, right: 56, top: 40, bottom: 50 },
+    grid: { left: 40, right: 40, top: 50, bottom: 30 },
     tooltip: {
       trigger: "axis",
       backgroundColor: "rgba(42, 50, 60, 0.95)",
@@ -469,6 +481,12 @@ export function updateChart(chart: ChartInstance, roast: RoastState) {
       { id: "etRaw", data: etRawData },
     ],
   });
+}
+
+// Reset any user pan/zoom on the time axis back to the full data range.
+// Used by Clear Reset so the next roast starts from a fresh view.
+export function resetChartZoom(chart: ChartInstance) {
+  chart.dispatchAction({ type: "dataZoom", start: 0, end: 100 });
 }
 
 // Programmatically show the chart's hover crosshair + tooltip at a given

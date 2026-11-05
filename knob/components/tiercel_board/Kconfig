@@ -1,0 +1,101 @@
+menu "Tiercel board"
+
+    config TIERCEL_KNOB_INVERT
+        bool "Invert knob direction"
+        default n
+        help
+            Swap clockwise and anticlockwise. The knob's A contact is wired as
+            clockwise on the Waveshare 1.8" module; set this only if a unit
+            turns the wrong way.
+
+    config TIERCEL_HAPTIC_FORCE_ERM
+        bool "Skip LRA calibration and drive the motor as an ERM"
+        default n
+        help
+            The motor is an LRA (LRA_P/LRA_N on the schematic). At power-up
+            the DRV2605 auto-calibrates it and plays effects closed loop,
+            falling back to ERM open loop only if calibration fails. Enable
+            this to always use ERM open loop, as Waveshare's demo does --
+            clicks are then too faint to feel through the glass.
+
+    config TIERCEL_HAPTIC_LRA_RATED
+        int "LRA rated voltage (RATED_VOLTAGE register)"
+        range 16 255
+        default 80
+        help
+            Closed-loop target amplitude, about 20.7 mV rms per step at
+            ~200 Hz: 80 is roughly 2 V rms, typical for a coin LRA. Raise it
+            for a stronger feel, lower it if the motor rattles.
+
+    config TIERCEL_HAPTIC_LIBRARY
+        int "DRV2605 waveform library"
+        range 1 7
+        default 5
+        help
+            Used only on the ERM fallback (the LRA path always uses library
+            6). 1-5 are ERM libraries, 7 is the 4.5V ERM library. 5 is what
+            Waveshare's demo selects.
+
+    config TIERCEL_HAPTIC_OD_CLAMP
+        int "Motor drive clamp (OD_CLAMP register)"
+        range 64 255
+        default 166
+        help
+            The peak voltage the DRV2605 drives the motor with, in steps of
+            21.59 mV (ERM open loop): 166 is about 3.6 V, so the output
+            saturates at the board's supply. The chip's power-on value is 140
+            (3.0 V), which leaves every effect noticeably weaker -- too light
+            to feel through the glass. Lower it if a unit buzzes harshly.
+
+    config TIERCEL_HAPTIC_DETENT_EFFECT
+        int "Effect for a knob detent"
+        range 1 123
+        default 1
+        help
+            Played on every detent that moves a selection or a value: the
+            lightest kind, one short click. 1 is "Strong Click 100%" -- the
+            shorter, softer ticks (21-26) cannot be felt through the glass.
+
+    config TIERCEL_HAPTIC_TAP_EFFECT
+        int "Effect for an accepted tap"
+        range 1 123
+        default 10
+        help
+            Played when a tap selects or opens something: two clicks, one up
+            from a detent. 10 is "Double Click 100%".
+
+    config TIERCEL_HAPTIC_CONFIRM_EFFECT
+        int "Effect for a committed change"
+        range 1 123
+        default 12
+        help
+            Played when something takes effect -- a device toggles, a mode is
+            set: three clicks. 12 is "Triple Click 100%".
+
+    config TIERCEL_HAPTIC_BACK_EFFECT
+        int "Effect for going back"
+        range 1 123
+        default 14
+        help
+            Played when a swipe, a hold or the back chip takes you back a
+            screen. 14 is "Strong Buzz 100%": long enough to feel under a
+            finger still pressing the glass, and unlike any click, so back
+            never feels like a selection.
+
+    config TIERCEL_HAPTIC_LIMIT_EFFECT
+        int "Effect for a knob value at its limit"
+        range 1 123
+        default 52
+        help
+            Played on every extra detent once a knob-adjusted value is at its
+            minimum or maximum. 52 is "Pulsing Strong 1 100%", which no other
+            kind uses, so an end stop never reads as a detent.
+
+    config TIERCEL_HAPTIC_ALERT_EFFECT
+        int "Effect for an alarm"
+        range 1 123
+        default 47
+        help
+            47 is "Buzz 1 100%".
+
+endmenu
