@@ -1,0 +1,19 @@
+menu "Yaeger knob"
+
+    config KNOB_WIFI_SSID
+        string "Wi-Fi SSID"
+        default ""
+
+    config KNOB_WIFI_PASSWORD
+        string "Wi-Fi password"
+        default ""
+
+    config KNOB_ROASTER_HOST
+        string "Roaster host (mDNS name or IP)"
+        default "yaeger.local"
+
+    config KNOB_ROASTER_PORT
+        int "Roaster WebSocket port"
+        default 80
+
+endmenu

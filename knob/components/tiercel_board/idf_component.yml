@@ -1,0 +1,13 @@
+dependencies:
+  idf: ">=5.4"
+  # Must match lvglVersion in GUI/Tiercel.eez-project EXACTLY, and moves only
+  # together with esp_lvgl_port below -- EEZ Studio emits different LVGL calls
+  # per version, so a mismatch fails inside generated code.
+  lvgl/lvgl:
+    version: "~9.2.2"
+    public: true
+  espressif/esp_lvgl_port:
+    version: "~2.4"
+    public: true
+  espressif/esp_lcd_st77916: "~2.0.2"
+  espressif/esp_lcd_touch_cst816s: "~1.1.2"

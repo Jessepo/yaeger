@@ -1,0 +1,46 @@
+# Yaeger knob -- build configuration.
+#
+# This file only SEEDS a new `sdkconfig`; ESP-IDF does not re-apply it to an
+# existing one. After changing anything below:  rm sdkconfig && idf.py build
+
+CONFIG_IDF_TARGET="esp32s3"
+
+# Waveshare ESP32-S3-Knob-Touch-LCD-1.8: ESP32-S3R8 (8 MB octal PSRAM), 16 MB
+# flash. DIO, not QIO -- this board's flash has not been proven in QIO.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# The USB-C port reaches the S3's own USB-Serial/JTAG in one plug orientation.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# 1 kHz tick: LVGL animation and the 3 ms knob poll both want it.
+CONFIG_FREERTOS_HZ=1000
+
+# Resolve yaeger.local (the roaster's mDNS name) through getaddrinfo().
+CONFIG_LWIP_DNS_SUPPORT_MDNS_QUERIES=y
+
+# LVGL 9
+CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_USE_PERF_MONITOR=n
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_28=y
+CONFIG_LV_FONT_MONTSERRAT_40=y
+
+# lv_malloc() from the ESP heap rather than LVGL's fixed 64 KB pool; LVGL's
+# out-of-memory handler is an infinite loop that presents as a watchdog reset.
+CONFIG_LV_USE_CLIB_MALLOC=y
+CONFIG_LV_USE_CLIB_STRING=y
+CONFIG_LV_USE_CLIB_SPRINTF=y
