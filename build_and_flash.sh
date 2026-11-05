@@ -55,7 +55,7 @@ npm run build || { echo "npm build failed!"; exit 1; }
 echo "Returning to the project root..."
 
 cd .. || exit 1
-fi
+
 
 # Step 5: Erase the device memory (optional but recommended)
 echo "Erasing the device memory..."

@@ -148,13 +148,9 @@ static bool heat_allowed(void)
     if (st.age_ms >= STALE_MS) {
         return false;
     }
-    /* A heater that is already on can always be turned down -- a roast driven
-     * from Artisan never sets `following`. Starting it from zero needs a roast
-     * and a fan. */
-    if (s_w[W_HEAT].val > 0) {
-        return true;
-    }
-    return st.following && s_w[W_FAN].val > 0;
+    /* The firmware no longer tracks a roast, so the fan is the only
+     * precondition. A heater that is already on can always be turned down. */
+    return s_w[W_HEAT].val > 0 || s_w[W_FAN].val > 0;
 }
 
 static void open_arc(int which)

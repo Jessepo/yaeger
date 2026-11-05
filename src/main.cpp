@@ -4,17 +4,18 @@
 #include <ElegantOTA.h> //https://github.com/ayushsharma82/AsyncElegantOTA
 #include <LittleFS.h>
 #include <Preferences.h>
-
 #include "AsyncWebSocket.h"
 #include "CommandLoop.h"
 #include "HardwareSerial.h"
 #include "WiFiType.h"
 #include "api.h"
+#include "config.h"
 #include "display.h"
 #include "logging.h"
 #include "wifi_setup.h"
 #include "Control.h"
 #include "preferenceKeys.h"
+#include "CrackDetector.h"
 
 #include "leds.h"
 
@@ -82,7 +83,6 @@ void setup() {
     Serial.println("LittleFS failed");
   }
   if (!LittleFS.exists("/roasts")) LittleFS.mkdir("/roasts");
-  if (!LittleFS.exists("/profiles")) LittleFS.mkdir("/profiles");
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
   server.serveStatic("/settings", LittleFS, "/").setDefaultFile("index.html");
   server.serveStatic("/editor", LittleFS, "/").setDefaultFile("index.html");
@@ -96,13 +96,9 @@ void setup() {
 
 
 
-  control = new Control(
-    preferences.getFloat(pidPKey,1),
-    preferences.getFloat(pidIKey,0.1),
-    preferences.getFloat(pidDKey,0.01),
-    StringToTarget(preferences.getString(temperatureTargetKey,"ET")),
-    preferences.getString(fanModeKey, "pwm") == "ssr"
-  );
+  CrackDetector::begin();
+
+  control = new Control(preferences.getString(fanModeKey, "pwm") == "ssr");
 
   // WebSocket handler
   wsHandler = new WSRequestHandler(&ws, control, &preferences);
@@ -117,6 +113,7 @@ void setup() {
 
   server.begin();
   log("HTTP server started");
+  startDisplayTask(control);
   pixels.clear();
   pixels.setPixelColor(0, Adafruit_NeoPixel::Color(0, 5, 0));
   pixels.show();
@@ -128,12 +125,25 @@ void loop() {
   delay(10);
   control->loop();
   wsHandler->loop();
-  updateDisplay(control);
   updateLeds(control);
-  if (control->hasAutotuneResults()) {
-    preferences.putFloat(pidPKey, control->getKp());
-    preferences.putFloat(pidIKey, control->getKi());
-    preferences.putFloat(pidDKey, control->getKd());
-    control->resetAutotune();
+
+  // Handle tuning commands from USB Serial (crack-tuner.html or terminal).
+  // Skip while in monitor mode: Core 0 is streaming binary PCM on Serial and
+  // mixing reads here would corrupt both streams.
+  if (!CrackDetector::isMonitorMode()) {
+    static String serialCmd = "";
+    while (Serial.available()) {
+      char c = (char)Serial.read();
+      if (c == '\n' || c == '\r') {
+        serialCmd.trim();
+        if (serialCmd.length() > 0) {
+          CrackDetector::processSerialCommand(serialCmd);
+        }
+        serialCmd = "";
+      } else {
+        serialCmd += c;
+      }
+    }
   }
+  CrackDetector::updateLed();
 }

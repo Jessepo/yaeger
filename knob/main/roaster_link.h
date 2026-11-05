@@ -17,7 +17,6 @@ typedef struct {
     float    bt;
     float    fan;        /**< 0-100 */
     float    heat;       /**< 0-100 */
-    bool     following;  /**< firmware is running a roast (set by startRoast) */
     uint32_t age_ms;     /**< since the frame arrived; UINT32_MAX if none yet */
 } roaster_status_t;
 

@@ -43,13 +43,11 @@ static void parse_frame(const char *text)
     const cJSON *type = cJSON_GetObjectItemCaseSensitive(d, "type");
     /* getData replies carry no "type"; only status frames hold everything. */
     if (cJSON_IsString(type) && strcmp(type->valuestring, "status") == 0) {
-        const cJSON *fol = cJSON_GetObjectItemCaseSensitive(d, "following");
         xSemaphoreTake(s_lock, portMAX_DELAY);
         s_status.et        = num(d, "ET", NAN);
         s_status.bt        = num(d, "BT", NAN);
         s_status.fan       = num(d, "FanVal", 0);
         s_status.heat      = num(d, "BurnerVal", 0);
-        s_status.following = cJSON_IsTrue(fol);
         s_status_us        = esp_timer_get_time();
         xSemaphoreGive(s_lock);
     }

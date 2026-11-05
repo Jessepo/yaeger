@@ -63,9 +63,7 @@ function connect() {
     connectionStatus.val = "Connected";
     reconnectDelayMs = 500;
 
-    // Initial state fetch on every (re)connect.
     rawSend(ws, { id: 1, command: "getPreferences" });
-    rawSend(ws, { id: 1, command: "getRoastState" });
 
     // Notify subscribers (so they can re-fetch state).
     reconnectTick.val = reconnectTick.val + 1;

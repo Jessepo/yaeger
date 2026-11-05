@@ -11,9 +11,8 @@ and sets fan and heat.
 - Tap **FAN** or **HEAT**: an arc appears around the rim. Drag it, or turn the
   knob (5% per step). It hides after 4 s without input.
 - **HEAT** is dimmed, and ignores taps, unless the heater is already on (so it
-  can be turned down) or a roast is running (`following`) and the fan is above
-  0. The firmware has no software interlock of its own; this is the only one,
-  besides the hardware interlock.
+  can be turned down) or the fan is above 0. The firmware has no software
+  interlock of its own; this is the only one, besides the hardware interlock.
 - Setting the fan to 0 sends heat 0 first.
 
 ## Build
