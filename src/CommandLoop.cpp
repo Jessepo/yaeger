@@ -1,4 +1,4 @@
-#include "CommandLoop.h"
+re#include "CommandLoop.h"
 #include "logging.h"
 #include "Control.h"
 #include <ArduinoJson.h>
@@ -29,10 +29,20 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
       break;
     case WS_EVT_DISCONNECT: {
       logf("[%u] Disconnected!\n", client->id());
-      // turn off heater and set fan to 100% when not under PID control
-      if (this->control->getMode() == OperationalMode::Manual && control->getHeater() > 0.f) {
+      // turn off heater and set fan to 20% when not under PID control, but
+      // only once the LAST client has gone: a second client (Artisan, the
+      // knob) dropping or being closed must not cut a roast someone else is
+      // still watching.
+      bool otherClients = false;
+      for (const auto &c : server->getClients()) {
+        if (c.id() != client->id() && c.status() == WS_CONNECTED) {
+          otherClients = true;
+          break;
+        }
+      }
+      if (!otherClients && this->control->getMode() == OperationalMode::Manual && control->getHeater() > 0.f) {
         control->setHeater(0.f);
-        control->setFan(100.f);
+        control->setFan(20.f);
       }
     }
     break;
