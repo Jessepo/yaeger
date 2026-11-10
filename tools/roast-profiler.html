@@ -1,0 +1,498 @@
+<title>Yaeger Profile Builder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: instrument panel — controls rail on the left, plot + readouts on the right; stacks on phones */
+:root{
+  --bg:#EEF1EF; --surface:#FFFFFF; --ink:#1B2421; --muted:#5D6A64; --line:#D5DCD8; --soft:#E5EAE7;
+  --bt:#6E3F1C; --et:#D4531C; --ror:#23807A; --ref:#A3ADA8; --warn:#9A5B00; --warnbg:#FFF3DC;
+  --dry:rgba(80,140,90,.07); --mai:rgba(200,140,40,.08); --dev:rgba(110,63,28,.09);
+  --f-display:"Space Grotesk",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111614; --surface:#19201D; --ink:#E4EAE7; --muted:#94A29B; --line:#2D3733; --soft:#222A27;
+  --bt:#D9A06B; --et:#FF7B47; --ror:#5CC6BC; --ref:#56625C; --warn:#F2B755; --warnbg:#2D2412;
+  --dry:rgba(120,190,130,.07); --mai:rgba(230,170,60,.07); --dev:rgba(217,160,107,.09); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111614; --surface:#19201D; --ink:#E4EAE7; --muted:#94A29B; --line:#2D3733; --soft:#222A27;
+  --bt:#D9A06B; --et:#FF7B47; --ror:#5CC6BC; --ref:#56625C; --warn:#F2B755; --warnbg:#2D2412;
+  --dry:rgba(120,190,130,.07); --mai:rgba(230,170,60,.07); --dev:rgba(217,160,107,.09); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+.wrap{max-width:1280px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 24px;margin-bottom:16px}
+h1{font-family:var(--f-display);font-weight:600;font-size:26px;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 0;max-width:70ch}
+.grid{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.rail{display:flex;flex-direction:column;gap:18px}
+fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+legend{font-family:var(--f-display);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;padding:0}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{text-align:center;padding:7px 4px;cursor:pointer;font-size:13px;border-left:1px solid var(--line);user-select:none}
+.seg label:first-of-type{border-left:0}
+.seg input:checked+label{background:var(--ink);color:var(--surface)}
+.seg input:focus-visible+label{outline:2px solid var(--et);outline-offset:-2px}
+.row{display:grid;grid-template-columns:1fr 92px;align-items:center;gap:8px}
+.row label{color:var(--ink)}
+.row small{display:block;color:var(--muted);font-size:12px}
+input[type=number],input[type=text]{width:100%;font:500 14px var(--f-mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-variant-numeric:tabular-nums}
+input[type=text]{font-family:var(--f-body)}
+select{width:100%;font:500 14px var(--f-body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 8px}
+select:focus-visible,textarea:focus-visible{outline:2px solid var(--et);outline-offset:1px}
+input:focus-visible,button:focus-visible{outline:2px solid var(--et);outline-offset:1px}
+input.edited{border-color:var(--et)}
+button{font:500 13px var(--f-body);border-radius:7px;padding:8px 12px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.primary{background:var(--et);border-color:var(--et);color:#fff}
+button:hover{filter:brightness(.96)}
+.linkbtn{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;font-size:12px}
+.main{display:flex;flex-direction:column;gap:16px;min-width:0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stat{background:var(--surface);padding:10px 12px}
+.stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.stat .v{font:500 20px var(--f-mono);font-variant-numeric:tabular-nums}
+.stat .v small{font-size:12px;color:var(--muted);margin-left:3px}
+.chartbox{position:relative}
+svg{display:block;width:100%;height:auto;font-family:var(--f-mono)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:18px;height:3px;border-radius:2px;display:inline-block}
+.legend label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:12px var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.warns{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.warns li{background:var(--warnbg);color:var(--warn);border-radius:6px;padding:7px 10px;font-size:13px}
+.two{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px}
+@media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
+h2{font-family:var(--f-display);font-size:15px;font-weight:600;margin:0 0 10px}
+.tablewrap{overflow-x:auto;max-height:420px;overflow-y:auto}
+table{border-collapse:collapse;width:100%;font:13px var(--f-mono);font-variant-numeric:tabular-nums}
+th{font:500 11px var(--f-body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface)}
+td{text-align:right;padding:4px 8px;border-bottom:1px solid var(--soft)}
+th:first-child,td:first-child{text-align:left}
+tr.ev td{font-weight:500;background:var(--soft)}
+td .tag{font:500 11px var(--f-body);color:var(--muted);margin-left:6px}
+.phases{display:flex;flex-direction:column;gap:10px}
+.bar{display:flex;height:26px;border-radius:6px;overflow:hidden;font:500 12px var(--f-mono)}
+.bar div{display:flex;align-items:center;justify-content:center;color:#fff;min-width:0;overflow:hidden;white-space:nowrap}
+.pl{display:grid;grid-template-columns:auto 1fr auto auto;gap:4px 12px;font-size:13px}
+.pl .n{font-variant-numeric:tabular-nums;font-family:var(--f-mono);text-align:right}
+.export{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.status{font-size:12px;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);margin:0}
+textarea{width:100%;height:120px;font:11px var(--f-mono);background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px}
+@media (prefers-reduced-motion:no-preference){path.curve{transition:d .25s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Yaeger Profile Builder</h1>
+      <p class="sub">Base BT and inlet-air (IT, logged as ET) targets for Artisan, scaled from your first-crack temperature and the IT–BT gap in your Kenya reference roast.</p>
+    </div>
+  </header>
+
+  <div class="grid">
+    <form class="panel rail" id="form" autocomplete="off">
+      <fieldset>
+        <legend>Green coffee</legend>
+        <textarea id="beanText" placeholder="Paste the importer's description: process, altitude, screen size, varietal…" style="height:76px;font:12px var(--f-body)"></textarea>
+        <div class="export"><button type="button" id="parseBtn">Read description</button><button type="button" class="linkbtn" id="sampleBtn">Try an example</button></div>
+        <p class="note" id="parseOut"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Roast level</legend>
+        <div class="seg" id="levelSeg"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Process</legend>
+        <select id="proc" aria-label="Process"></select>
+        <p class="note" id="procNote"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Bean density</legend>
+        <div class="seg" id="densSeg"></div>
+        <p class="note">Low: under ~1,200 m or soft beans. High: over ~1,800 m, dense, small screen.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Machine</legend>
+        <div class="row"><label for="fcT">First crack on your probe<small>°C BT</small></label><input id="fcT" type="number" step="0.5" value="200"></div>
+        <div class="row"><label for="t0">BT at charge<small>°C, cold start</small></label><input id="t0" type="number" step="1" value="10"></div>
+        <div class="row"><label for="batch">Batch<small>g green (ref 200)</small></label><input id="batch" type="number" step="5" value="200"></div>
+        <div class="row"><label for="trim">IT offset<small>°C added to IT</small></label><input id="trim" type="number" step="1" value="0"></div>
+        <div class="row"><label for="gain">IT gap scale<small>% of reference gap</small></label><input id="gain" type="number" step="5" value="100"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend style="display:flex;justify-content:space-between;width:100%">Targets <button type="button" class="linkbtn" id="reset">Reset to suggested</button></legend>
+        <div class="row"><label for="yT">Yellowing<small>°C BT</small></label><input id="yT" type="number" step="0.5" data-derived></div>
+        <div class="row"><label for="yt">Yellowing time<small>m:ss</small></label><input id="yt" type="text" data-derived inputmode="numeric"></div>
+        <div class="row"><label for="ft">First crack time<small>m:ss</small></label><input id="ft" type="text" data-derived inputmode="numeric"></div>
+        <div class="row"><label for="dT">Drop<small>°C BT</small></label><input id="dT" type="number" step="0.5" data-derived></div>
+        <div class="row"><label for="dtr">Development<small>% of total (DTR)</small></label><input id="dtr" type="number" step="0.5" data-derived></div>
+        <p class="note">Orange outline: you changed it. Picking a level, process or density resets these.</p>
+      </fieldset>
+    </form>
+
+    <div class="main">
+      <div class="stats" id="stats"></div>
+
+      <div class="panel">
+        <div class="chartbox" id="chartbox">
+          <svg id="chart" viewBox="0 0 900 430" role="img" aria-label="Target BT, IT and RoR curves"></svg>
+          <div class="tip" id="tip" hidden></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--bt)"></i>BT target</span>
+          <span><i style="background:var(--et)"></i>IT target (ET channel)</span>
+          <span><i style="background:var(--ror)"></i>BT RoR (°C/min, right axis)</span>
+          <label><input type="checkbox" id="showRef" checked> Kenya reference, 1 Nov (dashed)</label>
+        </div>
+      </div>
+
+      <ul class="warns" id="warns"></ul>
+
+      <div class="two">
+        <div class="panel">
+          <h2>Targets every 30 s</h2>
+          <div class="tablewrap"><table id="tbl"></table></div>
+        </div>
+        <div class="rail">
+          <div class="panel phases">
+            <h2>Phases</h2>
+            <div class="bar" id="bar"></div>
+            <div class="pl" id="pl"></div>
+          </div>
+          <div class="panel rail" style="gap:12px">
+            <h2 style="margin:0">Export to Artisan</h2>
+            <div class="row" style="grid-template-columns:1fr"><input id="pname" type="text" aria-label="Profile name"></div>
+            <div class="export">
+              <button type="button" class="primary" id="dlAlog">Download .alog</button>
+              <button type="button" id="dlCsv">Download CSV</button>
+              <button type="button" id="cpAlog">Copy .alog text</button>
+            </div>
+            <span class="status" id="status" role="status"></span>
+            <p class="note">In Artisan: Roast › Background › Load, then let the PID follow the background ET. CHARGE, DRY, FCs and DROP markers are set; no events or alarms are included.</p>
+            <textarea id="fallback" hidden readonly aria-label=".alog text"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- Reference: Yaeger Kenya (Priory Farm), 1 Nov 2026, 200 g, fan 65 %, cold start ----------
+const REF = { T0: 9.9, Ty: 152.2, Tfc: 199.4, Td: 214.5, ty: 200, tfc: 400, td: 515,
+  // 5 s samples, lightly smoothed
+  bt: [7.6,10.5,14.9,18.3,22.9,29.2,33.6,37.3,41.3,45.4,48.5,54.3,59.9,62.4,67.1,71.4,79.1,85.7,87.9,93.0,96.1,96.4,101.9,104.4,108.4,113.5,116.9,121.5,125.6,129.8,133.7,137.9,139.1,140.5,142.6,143.9,145.0,146.2,147.7,151.5,152.4,153.6,156.2,158.4,159.9,161.1,162.5,162.9,164.4,166.0,168.9,170.4,171.2,171.1,172.3,173.9,175.7,177.5,179.4,181.0,182.6,182.7,183.3,184.3,185.2,187.8,189.8,189.2,190.1,191.3,192.8,193.6,194.1,194.8,196.2,197.1,198.5,200.1,198.5,198.3,199.2,199.1,200.1,201.8,202.5,203.5,203.8,204.1,205.3,206.5,206.1,206.9,207.7,207.1,207.5,209.4,211.0,212.3,212.4,212.6,212.6,212.7,213.8,214.9],
+  et: [16.8,60.9,86.2,84.9,94.1,110.6,122.2,130.0,140.3,150.1,159.3,167.4,174.5,179.3,184.2,188.1,190.3,191.5,193.4,194.7,195.3,197.1,197.7,198.5,199.0,200.7,201.7,202.5,203.3,203.2,204.2,207.3,207.4,208.5,211.4,216.1,216.4,213.1,212.3,213.3,215.8,215.8,216.8,218.1,218.5,221.3,221.6,221.5,222.4,223.4,225.1,226.9,227.3,226.5,228.5,229.1,231.1,232.3,231.1,232.0,233.6,231.9,232.8,237.2,236.7,236.0,238.7,238.1,237.9,238.0,238.2,240.7,241.5,240.1,241.8,244.7,252.7,257.2,249.9,241.2,240.7,243.1,245.2,245.6,244.1,244.2,245.9,245.1,244.6,244.1,245.1,246.0,245.6,244.9,244.1,244.2,243.8,243.8,243.9,242.9,241.1,241.8,243.6,240.9],
+  // IT − BT gap vs phase position u (0 charge, 1 yellowing, 2 FC, 3 drop), step 0.1, smoothed (30 s)
+  gap: [25.4,74.2,98.7,114.7,111.8,100.6,90.4,77.4,69.0,68.9,62.5,60.2,57.4,56.3,55.1,50.6,50.7,47.4,46.0,44.5,43.1,43.4,42.4,40.3,39.1,38.3,36.0,33.3,30.9,29.2,26.4]
+};
+const GAP_RATE = 1.0;   // extra IT °C per °C/min of RoR above the reference (fit to the Kenya roast: 0.9–1.2)
+const ROR_END = 0.6;    // RoR at drop as a fraction of RoR at FC
+
+const LEVELS = { light:{name:"Light",dev:7,dtr:16}, medium:{name:"Medium",dev:11,dtr:19}, meddark:{name:"Med-dark",dev:16,dtr:22}, dark:{name:"Dark",dev:24,dtr:25} };
+// fc: s added to FC time · dry: added to drying share · drop: °C on drop · fcT: °C on expected FC · dtr: % on DTR
+const PROCS  = {
+  washed:{name:"Washed",fc:0,dry:0,drop:0,fcT:0,dtr:0,note:"Reference behaviour. Even, predictable, takes heat well."},
+  honey:{name:"Honey / pulped natural",fc:-5,dry:.01,drop:-1,fcT:0,dtr:0,note:"Surface sugars brown early. Slightly gentler start."},
+  natural:{name:"Natural",fc:-10,dry:.02,drop:-1,fcT:0,dtr:0,note:"Fruit sugars scorch easily and FC tends to come early. Gentler drying, softer finish."},
+  anaNat:{name:"Anaerobic natural (whole cherry)",fc:-15,dry:.03,drop:-1,fcT:-1,dtr:-1,note:"Very sugar- and acid-rich, cracks early and runs away after FC. Long gentle drying, drop lighter, short development to keep the ferment fruit."},
+  anaWash:{name:"Anaerobic washed",fc:-5,dry:.01,drop:-1,fcT:0,dtr:-1,note:"Roasts close to washed but browns a little sooner. Keep development short to hold the ferment notes."},
+  carbonic:{name:"Carbonic maceration",fc:-15,dry:.03,drop:-1,fcT:-1,dtr:-1,note:"Behaves like anaerobic natural: early FC, fast development. Treat gently."},
+  infused:{name:"Co-ferment / infused / thermal shock",fc:-15,dry:.03,drop:-2,fcT:-1,dtr:-2,note:"Added sugars and aromatics burn first. Lowest heat into FC, lightest drop."},
+  wetHulled:{name:"Wet-hulled (giling basah)",fc:10,dry:.03,drop:0,fcT:0,dtr:1,note:"Higher moisture and softer structure. Longer drying, then it takes development well."},
+  decaf:{name:"Decaf",fc:-20,dry:.02,drop:-3,fcT:-3,dtr:0,note:"Looks darker than it is and cracks low and early. Drop by temperature, not colour."}
+};
+const DENS   = { low:{name:"Low",fc:-15,dry:.02}, med:{name:"Medium",fc:0,dry:0}, high:{name:"High",fc:15,dry:-.02} };
+
+// ---------- helpers ----------
+const lerp=(a,b,f)=>a+(b-a)*f;
+function interpNodes(nodes,x){ if(x<=nodes[0][0]) return nodes[0][1];
+  for(let i=1;i<nodes.length;i++){ if(x<=nodes[i][0]){const [x0,y0]=nodes[i-1],[x1,y1]=nodes[i];return lerp(y0,y1,(x-x0)/(x1-x0));} }
+  return nodes[nodes.length-1][1]; }
+function ma(arr,w){ const h=Math.floor(w/2),n=arr.length,out=new Array(n); for(let i=0;i<n;i++){let s=0;for(let j=i-h;j<=i+h;j++)s+=arr[Math.min(n-1,Math.max(0,j))];out[i]=s/(2*h+1);} return out; }
+function tableAt(tbl,u){ const x=Math.max(0,Math.min(tbl.length-1,u*10)),i=Math.floor(x),f=x-i; return i>=tbl.length-1?tbl[tbl.length-1]:lerp(tbl[i],tbl[i+1],f); }
+const fmtT=s=>{s=Math.round(s);return Math.floor(s/60)+":"+String(s%60).padStart(2,"0");};
+function parseT(v){ v=String(v).trim(); if(/^\d+:\d{1,2}$/.test(v)){const [m,s]=v.split(":").map(Number);return m*60+s;} const n=Number(v); return isFinite(n)&&v!==""?n:NaN; }
+
+// ---------- BT model: piecewise-linear declining RoR, solved to hit yellowing, FC and drop ----------
+function solveBT(T0,Ty,Tfc,Td,ty,tfc,td){
+  const tp=0.25*ty, rs=0.75;
+  const dm=(td-tfc)/60, mm=(tfc-ty)/60, a=tp/60, b=(ty-tp)/60;
+  const Rfc=2*(Td-Tfc)/(dm*(1+ROR_END)), Rd=ROR_END*Rfc;
+  const Ry=2*(Tfc-Ty)/mm-Rfc;
+  const Rp=((Ty-T0)-Ry*b/2)/((1+rs)/2*a+b/2);
+  const nodes=[[0,rs*Rp],[tp,Rp],[ty,Ry],[tfc,Rfc],[td,Rd]];
+  const N=Math.round(td);
+  let r=[]; for(let i=0;i<=N;i++) r.push(interpNodes(nodes,i));
+  r=ma(r,31);
+  const bt=[T0]; for(let i=1;i<=N;i++) bt.push(bt[i-1]+(r[i-1]+r[i])/120);
+  const iy=Math.round(ty), ifc=Math.round(tfc);
+  const err=[[0,0],[iy,bt[iy]-Ty],[ifc,bt[ifc]-Tfc],[N,bt[N]-Td]];
+  for(let i=0;i<=N;i++) bt[i]-=interpNodes(err,i);
+  const raw=bt.map((v,i)=>i===0?(bt[1]-bt[0])*60:i===N?(bt[N]-bt[N-1])*60:(bt[i+1]-bt[i-1])*30);
+  return {bt, ror:ma(raw,15), nodes:{Rp,Ry,Rfc,Rd}, N, iy, ifc};
+}
+const REFSYN = solveBT(REF.T0,REF.Ty,REF.Tfc,REF.Td,REF.ty,REF.tfc,REF.td);
+function uOf(t,ty,tfc,td){ return t<ty? t/ty : t<tfc? 1+(t-ty)/(tfc-ty) : 2+(t-tfc)/(td-tfc); }
+function refTimeOf(u){ return u<1? u*REF.ty : u<2? REF.ty+(u-1)*(REF.tfc-REF.ty) : REF.tfc+(u-2)*(REF.td-REF.tfc); }
+
+function build(p){
+  const warns=[];
+  const s=solveBT(p.T0,p.Ty,p.Tfc,p.Td,p.ty,p.tfc,p.td);
+  const bf=Math.pow(Math.max(50,p.batch)/200,0.25), g=p.gain/100;
+  let et=s.bt.map((b,i)=>{ const u=uOf(i,p.ty,p.tfc,p.td);
+    const rr=REFSYN.ror[Math.min(REFSYN.N,Math.round(refTimeOf(u)))];
+    return b + g*(tableAt(REF.gap,u)*bf + GAP_RATE*(s.ror[i]-rr)) + p.trim; });
+  et=ma(et,15);
+  const etMax=Math.max(...et), etFc=et[s.ifc];
+  if(s.nodes.Ry<=s.nodes.Rfc*1.05) warns.push("RoR would flatten or rise between yellowing and first crack. Give the Maillard phase more time, or raise the drop/DTR so FC can arrive with more momentum.");
+  if(s.nodes.Rfc<6) warns.push(`RoR reaches first crack at only ${s.nodes.Rfc.toFixed(1)} °C/min. Your Kenya roast stalled near 5. Add a degree or two to the drop, or a little more development time.`);
+  if(s.nodes.Rp>80) warns.push(`Drying needs a peak RoR of ${s.nodes.Rp.toFixed(0)} °C/min, well above the ~60 in your reference. Push yellowing later.`);
+  if(s.nodes.Rp<35) warns.push(`Drying peak RoR is only ${s.nodes.Rp.toFixed(0)} °C/min. Air roasters bake easily when drying drags; bring yellowing earlier.`);
+  if(etMax>265) warns.push(`IT peaks at ${etMax.toFixed(0)} °C, above the 261 °C peak your Kenya roast reached. Check the heater can hold it at this fan setting.`);
+  if(p.dtr<13||p.dtr>28) warns.push(`DTR of ${p.dtr}% is outside the usual 15–25% range.`);
+  if(Math.abs(p.batch-200)>=25) warns.push(`The IT gap is scaled for ${p.batch} g as an estimate. The reference was 200 g; expect to tune the IT offset.`);
+  return {...s, et, etMax, etFc, warns, p};
+}
+
+// ---------- suggested targets from level / process / density ----------
+function suggest(sel,fcT){
+  const L=LEVELS[sel.level],P=PROCS[sel.proc],D=DENS[sel.dens];
+  const Tfc=fcT+P.fcT, tfc=400+P.fc+D.fc, share=0.5+P.dry+D.dry;
+  const dtr=L.dtr+P.dtr;
+  return { yT:+(Tfc-47).toFixed(1), yt:Math.round(tfc*share), ft:tfc, dT:+(Tfc+L.dev+P.drop).toFixed(1), dtr };
+}
+
+// ---------- Artisan .alog writer (Python literal, as Artisan reads it) ----------
+class Raw{constructor(s){this.s=s;}}
+function py(v){
+  if(v instanceof Raw) return v.s;
+  if(v===null||v===undefined) return "None";
+  if(typeof v==="boolean") return v?"True":"False";
+  if(typeof v==="number") return Number.isFinite(v)?String(v):"0.0";
+  if(typeof v==="string") return "'"+v.replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\n/g,"\\n").replace(/\r/g,"")+"'";
+  if(Array.isArray(v)) return "["+v.map(py).join(", ")+"]";
+  return "{"+Object.entries(v).map(([k,x])=>py(k)+": "+py(x)).join(", ")+"}";
+}
+const fl=(arr,d)=>new Raw("["+arr.map(x=>x.toFixed(d)).join(", ")+"]");
+function toAlog(res,name,notes){
+  const N=res.N, t=[...Array(N+1).keys()], now=new Date();
+  const iso=now.toISOString().slice(0,10), hms=now.toTimeString().slice(0,8);
+  const empty10b=v=>Array(10).fill(v);
+  const prof={
+    recording_version:"4.2.0", version:"4.2.0", revision:"", build:"0", mode:"C",
+    timeindex:[0,res.iy,res.ifc,0,0,0,N,0],
+    title:name, locale:"en", beans:"", weight:new Raw(`[${res.p.batch.toFixed(1)}, 0.0, 'g']`),
+    roastertype:"Other / manual roaster (not listed)", roastersize:new Raw("0.0"), roasterheating:0, machinesetup:"Yaeger",
+    roastdate:now.toDateString(), roastisodate:iso, roasttime:hms, roastepoch:Math.floor(now.getTime()/1000), roasttzoffset:now.getTimezoneOffset()*60,
+    default_etypes:[true,true,true,true,true], default_etypes_set:[0,0,0,0,0], etypes:["Air","Drum","Damper","Burner","--"],
+    specialevents:[], specialeventstype:[], specialeventsvalue:[], specialeventsStrings:[],
+    roastingnotes:notes, cuppingnotes:"",
+    phases:[90,130,185,230], samplinginterval:new Raw("1.0"),
+    ambientTemp:new Raw("20.0"), zmax:42, zmin:0, ymax:300, ymin:0, xmin:new Raw("-20.0"), xmax:new Raw(((N+60)).toFixed(1)),
+    timex:fl(t,1), temp1:fl(res.et,1), temp2:fl(res.bt,1),
+    extradevices:[], extraname1:[], extraname2:[], extratimex:[], extratemp1:[], extratemp2:[],
+    extramathexpression1:[], extramathexpression2:[], extradevicecolor1:[], extradevicecolor2:[],
+    extraLCDvisibility1:empty10b(false), extraLCDvisibility2:empty10b(false), extraCurveVisibility1:empty10b(true), extraCurveVisibility2:empty10b(true),
+    extraDelta1:empty10b(false), extraDelta2:empty10b(false), extraFill1:Array(10).fill(0), extraFill2:Array(10).fill(0),
+    extramarkersizes1:[], extramarkersizes2:[], extramarkers1:[], extramarkers2:[], extralinewidths1:[], extralinewidths2:[],
+    extralinestyles1:[], extralinestyles2:[], extradrawstyles1:[], extradrawstyles2:[], extraNoneTempHint1:[], extraNoneTempHint2:[]
+  };
+  return py(prof);
+}
+function toCsv(res){
+  let s="time_s,time,BT_C,IT_ET_C,BT_RoR_C_per_min,event\n";
+  for(let i=0;i<=res.N;i++){ const ev=i===0?"CHARGE":i===res.iy?"YELLOW":i===res.ifc?"FCs":i===res.N?"DROP":"";
+    s+=`${i},${fmtT(i)},${res.bt[i].toFixed(1)},${res.et[i].toFixed(1)},${res.ror[i].toFixed(1)},${ev}\n`; }
+  return s;
+}
+
+// ---------- UI ----------
+if(typeof document!=="undefined"){
+const $=id=>document.getElementById(id);
+const sel={level:"medium",proc:"washed",dens:"med"};
+function seg(el,group,obj,key){ el.innerHTML=Object.entries(obj).map(([k,v])=>`<input type="radio" name="${group}" id="${group}-${k}" value="${k}" ${sel[key]===k?"checked":""}><label for="${group}-${k}">${v.name}</label>`).join("");
+  el.addEventListener("change",e=>{sel[key]=e.target.value; applySuggest(); }); }
+seg($("levelSeg"),"lvl",LEVELS,"level"); seg($("densSeg"),"dns",DENS,"dens");
+$("proc").innerHTML=Object.entries(PROCS).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join("");
+$("proc").value=sel.proc;
+$("proc").addEventListener("change",e=>{sel.proc=e.target.value; applySuggest();});
+function setSel(key,val){ sel[key]=val; if(key==="proc"){$("proc").value=val;} else { const g=key==="level"?"lvl":"dns"; const el=$(`${g}-${val}`); if(el) el.checked=true; } }
+
+// ---- read an importer description ----
+const SAMPLE=`Niguse Nare, Murago, Bensa, Sidama. Anaerobic fermentation, cherries sealed in barrels for 56 hours, then raised beds 20–25 days.
+Processing Method
+Anaerobic
+Processing Technique
+Anaerobic (whole cherry)
+Varietal
+74158
+Altitude
+2340 masl
+Screen Size
++14
+Region
+Murago, Ethiopia`;
+let beanLabel="", beanNotes=[];
+function parseBean(txt){
+  const t=txt.toLowerCase(), found=[], out={};
+  const fieldAfter=lab=>{ const m=txt.match(new RegExp(lab+"\\s*[:\\n]\\s*([^\\n]+)","i")); return m?m[1].trim():""; };
+  const procTxt=(fieldAfter("processing technique")+" "+fieldAfter("processing method")+" "+fieldAfter("process")).toLowerCase()||t;
+  const src=procTxt.trim()?procTxt:t;
+  const has=re=>re.test(src)||re.test(t);
+  if(/decaf|swiss water|sugar ?cane|\bea\b|mountain water/.test(t)) out.proc="decaf";
+  else if(/co-?ferment|infus|thermal shock|inocul|yeast|fruit added|cinnamon/.test(t)) out.proc="infused";
+  else if(/carbonic/.test(t)) out.proc="carbonic";
+  else if(/anaerob/.test(src)) out.proc=/washed|fully washed|depulped|pulped/.test(src)&&!/whole cherry|natural/.test(src)?"anaWash":"anaNat";
+  else if(/wet[- ]hull|giling/.test(t)) out.proc="wetHulled";
+  else if(/honey|pulped natural|miel/.test(src)) out.proc="honey";
+  else if(/natural|dry process|sun[- ]dried cherr/.test(src)) out.proc="natural";
+  else if(/washed|wet process/.test(src)) out.proc="washed";
+  if(out.proc) found.push(PROCS[out.proc].name);
+  const alt=[...txt.matchAll(/(\d[\d,.]{2,5})\s*(?:-|–|to)?\s*(\d[\d,.]{2,5})?\s*(?:m\.?a\.?s\.?l|masl|meters|metres|m\b)/gi)]
+    .map(m=>{const a=+m[1].replace(/[,.]/g,""), b=m[2]?+m[2].replace(/[,.]/g,""):a; return (a+b)/2;}).filter(v=>v>300&&v<3000);
+  const altField=fieldAfter("altitude"); let altV=null;
+  if(altField){ const n=altField.match(/\d[\d,.]*/g); if(n){ const v=n.map(x=>+x.replace(/[,.]/g,"")).filter(v=>v>300&&v<3000); if(v.length) altV=v.reduce((a,b)=>a+b)/v.length; } }
+  if(altV==null&&alt.length) altV=alt[alt.length-1];
+  if(altV!=null){ out.alt=Math.round(altV); out.dens=altV>=1800?"high":altV<1200?"low":"med"; found.push(`${out.alt} masl → ${DENS[out.dens].name.toLowerCase()} density`); }
+  const scr=fieldAfter("screen size")||(t.match(/screen[^\n\d]*(\+?\d{2})/)||[])[1]||"";
+  const sm=String(scr).match(/(\d{2})/); if(sm){ out.screen=+sm[1]; found.push(`screen ${out.screen}`); }
+  const varietal=fieldAfter("varietal")||fieldAfter("variety"); const region=fieldAfter("region");
+  out.label=[region.split(",")[0],varietal].filter(Boolean).join(" ");
+  if(!found.length) found.push("No process or altitude found. Set them below.");
+  return {out,found};
+}
+$("sampleBtn").addEventListener("click",()=>{$("beanText").value=SAMPLE; $("parseBtn").click();});
+$("parseBtn").addEventListener("click",()=>{
+  const {out,found}=parseBean($("beanText").value);
+  if(out.proc) setSel("proc",out.proc);
+  if(out.dens) setSel("dens",out.dens);
+  beanLabel=out.label||""; beanNotes=[];
+  if(out.screen&&out.screen<=15) beanNotes.push(`Small screen (${out.screen}): beans take heat fast. Try an IT offset of −3 to −5 °C on the first roast.`);
+  if(out.screen&&out.screen>=18) beanNotes.push(`Large screen (${out.screen}): heat takes longer to reach the core. Watch for underdeveloped centres.`);
+  $("parseOut").textContent="Found: "+found.join(" · ");
+  applySuggest();
+});
+
+const derived=["yT","yt","ft","dT","dtr"];
+let sug={};
+function applySuggest(){ sug=suggest(sel,+$("fcT").value||200);
+  $("yT").value=sug.yT; $("yt").value=fmtT(sug.yt); $("ft").value=fmtT(sug.ft); $("dT").value=sug.dT; $("dtr").value=sug.dtr;
+  derived.forEach(id=>$(id).classList.remove("edited"));
+  $("procNote").textContent=PROCS[sel.proc].note;
+  $("pname").value=(beanLabel?beanLabel+" ":"")+`${LEVELS[sel.level].name} ${PROCS[sel.proc].name.split(" (")[0]} ${DENS[sel.dens].name}-density`;
+  render(); }
+derived.forEach(id=>$(id).addEventListener("input",()=>{$(id).classList.add("edited");render();}));
+["t0","batch","trim","gain"].forEach(id=>$(id).addEventListener("input",render));
+$("fcT").addEventListener("input",()=>{ // keep user edits, shift untouched temps
+  const s2=suggest(sel,+$("fcT").value||200);
+  if(!$("yT").classList.contains("edited")) $("yT").value=s2.yT;
+  if(!$("dT").classList.contains("edited")) $("dT").value=s2.dT;
+  render(); });
+$("reset").addEventListener("click",applySuggest);
+$("showRef").addEventListener("change",render);
+$("form").addEventListener("submit",e=>e.preventDefault());
+
+let last=null;
+function readParams(){
+  const p={ Tfc:+$("fcT").value, T0:+$("t0").value, batch:+$("batch").value||200, trim:+$("trim").value||0, gain:+$("gain").value||100,
+    Ty:+$("yT").value, ty:parseT($("yt").value), tfc:parseT($("ft").value), Td:+$("dT").value, dtr:+$("dtr").value };
+  p.Tfc=p.Tfc+PROCS[sel.proc].fcT;
+  p.td=Math.round(p.tfc/(1-p.dtr/100));
+  const bad=[];
+  if(!(p.ty>20&&p.tfc>p.ty+30)) bad.push("First crack must come at least 30 s after yellowing (times as m:ss).");
+  if(!(p.T0<p.Ty&&p.Ty<p.Tfc-10)) bad.push("Yellowing must sit between charge BT and at least 10 °C below first crack.");
+  if(!(p.Td>p.Tfc)) bad.push("Drop must be hotter than first crack.");
+  if(!(p.dtr>3&&p.dtr<45)) bad.push("DTR must be between 3 and 45 %.");
+  return {p,bad};
+}
+
+function render(){
+  const {p,bad}=readParams();
+  if(bad.length){ $("warns").innerHTML=bad.map(w=>`<li>${w}</li>`).join(""); return; }
+  const r=build(p); last=r;
+  $("warns").innerHTML=[...beanNotes,...r.warns].map(w=>`<li>${w}</li>`).join("");
+  const dev=r.N-r.ifc;
+  $("stats").innerHTML=[
+    ["Drop",fmtT(r.N),""],["First crack",fmtT(r.ifc),`${p.Tfc.toFixed(0)}°`],["Drop BT",p.Td.toFixed(1),"°C"],
+    ["Development",fmtT(dev),`+${(p.Td-p.Tfc).toFixed(1)}°`],["IT at FC",r.etFc.toFixed(0),"°C"],["IT peak",r.etMax.toFixed(0),"°C"],["RoR at FC",r.ror[r.ifc].toFixed(1),"°/min"]
+  ].map(([k,v,u])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join("");
+  drawChart(r);
+  // table
+  let rows=`<thead><tr><th>Time</th><th>BT °C</th><th>IT °C</th><th>RoR</th><th>IT−BT</th></tr></thead><tbody>`;
+  const marks=new Map([[r.iy,"Yellow"],[r.ifc,"FCs"],[r.N,"Drop"]]);
+  const idx=new Set([0,...Array.from({length:Math.floor(r.N/30)+1},(_,i)=>i*30),...marks.keys()]);
+  [...idx].filter(i=>i<=r.N).sort((a,b)=>a-b).forEach(i=>{ const m=marks.get(i);
+    rows+=`<tr class="${m?"ev":""}"><td>${fmtT(i)}${m?`<span class="tag">${m}</span>`:""}</td><td>${r.bt[i].toFixed(1)}</td><td>${r.et[i].toFixed(1)}</td><td>${r.ror[i].toFixed(1)}</td><td>${(r.et[i]-r.bt[i]).toFixed(0)}</td></tr>`; });
+  $("tbl").innerHTML=rows+"</tbody>";
+  // phases
+  const ph=[["Drying",r.iy,"#5E8F62",`${p.T0.toFixed(0)}→${p.Ty.toFixed(0)}°`],["Maillard",r.ifc-r.iy,"#B7832A",`→${p.Tfc.toFixed(0)}°`],["Development",dev,"#6E3F1C",`→${p.Td.toFixed(0)}°`]];
+  $("bar").innerHTML=ph.map(([n,d,c])=>`<div style="flex:${d};background:${c}">${Math.round(d/r.N*100)}%</div>`).join("");
+  $("pl").innerHTML=ph.map(([n,d,c,tr])=>`<span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c};margin-right:6px"></i>${n}</span><span style="color:var(--muted)">${tr}</span><span class="n">${fmtT(d)}</span><span class="n">${(r.ror[Math.round((ph.indexOf(ph.find(x=>x[0]===n))===0?r.iy/2:n==="Maillard"?(r.iy+r.ifc)/2:(r.ifc+r.N)/2))]).toFixed(0)}°/min</span>`).join("");
+}
+
+// chart
+const W=900,H=430,M={l:46,r:46,t:16,b:34}, TMAX=280, RMAX=70;
+function drawChart(r){
+  const showRef=$("showRef").checked, xmax=Math.ceil((Math.max(r.N,showRef?REF.td:0)+20)/60)*60;
+  const X=t=>M.l+(t/xmax)*(W-M.l-M.r), Y=v=>M.t+(1-v/TMAX)*(H-M.t-M.b), YR=v=>M.t+(1-Math.max(0,Math.min(RMAX,v))/RMAX)*(H-M.t-M.b);
+  const path=(arr,step,fy)=>arr.map((v,i)=>(i?"L":"M")+X(i*step).toFixed(1)+" "+fy(v).toFixed(1)).join("");
+  let s="";
+  s+=`<rect x="${X(0)}" y="${M.t}" width="${X(r.iy)-X(0)}" height="${H-M.t-M.b}" fill="var(--dry)"/>`;
+  s+=`<rect x="${X(r.iy)}" y="${M.t}" width="${X(r.ifc)-X(r.iy)}" height="${H-M.t-M.b}" fill="var(--mai)"/>`;
+  s+=`<rect x="${X(r.ifc)}" y="${M.t}" width="${X(r.N)-X(r.ifc)}" height="${H-M.t-M.b}" fill="var(--dev)"/>`;
+  for(let v=0;v<=TMAX;v+=40){ s+=`<line x1="${M.l}" x2="${W-M.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${M.l-6}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${v}</text>`; }
+  for(let v=0;v<=RMAX;v+=10){ s+=`<text x="${W-M.r+6}" y="${YR(v)+4}" font-size="11" fill="var(--ror)">${v}</text>`; }
+  for(let t=0;t<=xmax;t+=60){ s+=`<line x1="${X(t)}" x2="${X(t)}" y1="${H-M.b}" y2="${H-M.b+4}" stroke="var(--muted)"/><text x="${X(t)}" y="${H-M.b+17}" text-anchor="middle" font-size="11" fill="var(--muted)">${t/60}:00</text>`; }
+  s+=`<text x="${M.l-6}" y="${M.t-4}" text-anchor="end" font-size="10" fill="var(--muted)">°C</text><text x="${W-M.r+6}" y="${M.t-4}" font-size="10" fill="var(--ror)">RoR</text>`;
+  if(showRef){ s+=`<path d="${path(REF.bt,5,Y)}" fill="none" stroke="var(--ref)" stroke-width="1.5" stroke-dasharray="4 3"/><path d="${path(REF.et,5,Y)}" fill="none" stroke="var(--ref)" stroke-width="1.5" stroke-dasharray="4 3"/>`; }
+  s+=`<path class="curve" d="${path(r.ror,1,YR)}" fill="none" stroke="var(--ror)" stroke-width="1.75"/>`;
+  s+=`<path class="curve" d="${path(r.et,1,Y)}" fill="none" stroke="var(--et)" stroke-width="2.25"/>`;
+  s+=`<path class="curve" d="${path(r.bt,1,Y)}" fill="none" stroke="var(--bt)" stroke-width="2.5"/>`;
+  [[r.iy,"Yellow"],[r.ifc,"FC"],[r.N,"Drop"]].forEach(([i,l])=>{ const x=X(i),y=Y(r.bt[i]);
+    s+=`<circle cx="${x}" cy="${y}" r="4" fill="var(--surface)" stroke="var(--bt)" stroke-width="2"/><text x="${x-6}" y="${y-10}" text-anchor="end" font-size="11" fill="var(--ink)">${l} ${fmtT(i)} · ${r.bt[i].toFixed(0)}°</text>`; });
+  s+=`<line id="xh" x1="0" x2="0" y1="${M.t}" y2="${H-M.b}" stroke="var(--muted)" stroke-dasharray="2 3" visibility="hidden"/>`;
+  s+=`<rect id="hit" x="${M.l}" y="${M.t}" width="${W-M.l-M.r}" height="${H-M.t-M.b}" fill="transparent"/>`;
+  const svg=$("chart"); svg.innerHTML=s;
+  const hit=$("hit"), tip=$("tip"), xh=$("xh"), box=$("chartbox");
+  const move=e=>{ const rc=svg.getBoundingClientRect(), sx=(e.clientX-rc.left)*W/rc.width;
+    const t=Math.round((sx-M.l)/(W-M.l-M.r)*xmax); if(t<0||t>r.N){tip.hidden=true;xh.setAttribute("visibility","hidden");return;}
+    xh.setAttribute("x1",X(t)); xh.setAttribute("x2",X(t)); xh.setAttribute("visibility","visible");
+    tip.innerHTML=`${fmtT(t)}<br><span style="color:var(--bt)">BT ${r.bt[t].toFixed(1)}</span><br><span style="color:var(--et)">IT ${r.et[t].toFixed(1)}</span><br><span style="color:var(--ror)">RoR ${r.ror[t].toFixed(1)}</span>`;
+    tip.hidden=false; const px=(e.clientX-box.getBoundingClientRect().left); tip.style.left=(px>box.clientWidth-130?px-120:px+12)+"px"; tip.style.top="10px"; };
+  hit.addEventListener("pointermove",move); hit.addEventListener("pointerleave",()=>{tip.hidden=true;xh.setAttribute("visibility","hidden");});
+}
+
+// export
+let downloads=null;
+try{ window.claude?.use?.("downloads").then(d=>{downloads=d;}).catch(()=>{}); }catch(e){}
+const status=m=>{$("status").textContent=m;};
+function safeName(){ return ($("pname").value.trim()||"Yaeger base profile").replace(/[\\/:*?"<>|]+/g,"-"); }
+function notes(){ const p=last.p; return `Generated by Yaeger Profile Builder. ${LEVELS[sel.level].name}, ${PROCS[sel.proc].name}, ${DENS[sel.dens].name} density. FC ${p.Tfc} C at ${fmtT(p.tfc)}, yellow ${p.Ty} C at ${fmtT(p.ty)}, drop ${p.Td} C at ${fmtT(p.td)}, DTR ${p.dtr}%. Batch ${p.batch} g, IT offset ${p.trim}, gap scale ${p.gain}%. ET = inlet air (IT).`; }
+async function save(filename,data){
+  if(!downloads){ // plain browser (file opened locally): normal download
+    try{ const url=URL.createObjectURL(new Blob([data],{type:"text/plain;charset=utf-8"}));
+      const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),2000); status(`Downloaded ${filename}`); }
+    catch(e){ status("This browser blocked the download. Copy the text below into a file instead."); showFallback(data); }
+    return; }
+  try{ await downloads.save({filename,data}); status(`Saved ${filename}`); }
+  catch(e){ status(e&&e.code==="dismissed"||e&&e.code==="declined"?"Save cancelled.":"Couldn't save the file. Use Copy instead."); }
+}
+function showFallback(data){ const ta=$("fallback"); ta.value=data; ta.hidden=false; }
+$("dlAlog").addEventListener("click",()=>{ if(last) save(safeName()+".alog",toAlog(last,$("pname").value||"Yaeger base profile",notes())); });
+$("dlCsv").addEventListener("click",()=>{ if(last) save(safeName()+".csv",toCsv(last)); });
+$("cpAlog").addEventListener("click",()=>{ if(!last) return; const txt=toAlog(last,$("pname").value||"Yaeger base profile",notes());
+  navigator.clipboard.writeText(txt).then(()=>status("Copied. Paste into a text file saved with the .alog extension."),()=>{showFallback(txt);$("fallback").select();status("Select all in the box below and copy.");}); });
+
+applySuggest();
+}
+if(typeof module!=="undefined") module.exports={build,suggest,toAlog,toCsv,REF,REFSYN};
+</script>
