@@ -5,19 +5,18 @@ set -e
 # Ensure this script is executable (`chmod +x build_and_flash.sh`) and has the correct permissions.
 #
 # Usage:
-#   ./build_and_flash.sh <s3 | s3-mini>
+#   ./build_and_flash.sh s3
 #
 # Example:
 #   ./build_and_flash.sh s3       # ESP32-S3
-#   ./build_and_flash.sh s3-mini  # ESP32-S3 Mini
 #
 # If cloned from GitHub, ensure correct permissions:
 #   chmod -R u+rwX .
 # The LittleFS filesystem might fail if permissions are incorrect.
 
-# Step 0: Check for required parameter (s3 or s3-mini)
+# Step 0: Check for required parameter (s3)
 if [[ -z "$1" ]]; then
-    echo "Usage: $0 <s3 | s3-mini>"
+    echo "Usage: $0 s3"
     exit 1
 fi
 
@@ -28,12 +27,12 @@ PIO_ENV="esp32-$1"
 PIO="$USERPROFILE/.platformio/penv/Scripts/pio.exe"
 # Validate the provided environment
 
-if [[ "$PIO_ENV" != "esp32-s3" && "$PIO_ENV" != "esp32-s3-mini" ]]; then
-    echo "Invalid argument: '$1'. Use 's3' or 's3-mini'."
+if [[ "$PIO_ENV" != "esp32-s3" ]]; then
+    echo "Invalid argument: '$1'. Use 's3'."
     exit 1
 fi
 
-export PATH="$PATH:$USERPROFILE/.platformio/penv/Scripts"
+export PATH="$PATH:$USERPROFILE/.platformio/penv/Scripts:$USERPROFILE/.platformio/tools/tool-mklittlefs"
 
 echo "Using PlatformIO environment: $PIO_ENV"
 

@@ -32,7 +32,7 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
       logf("[%u] Connected!\n", client->id());
       break;
 
-    case WS_EVT_DISCONNECT:
+    case WS_EVT_DISCONNECT: {
       logf("[%u] Disconnected!\n", client->id());
       // If the LAST client leaves and the heater is on, kill the heater and
       // drop the fan to a gentle 20% (100% blows the beans around). A second
@@ -50,6 +50,7 @@ void WSRequestHandler::onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         control->setFan(20.f);
       }
       break;
+    }
 
     case WS_EVT_DATA: {
       auto *info = (AwsFrameInfo *) arg;
