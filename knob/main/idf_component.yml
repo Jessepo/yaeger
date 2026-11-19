@@ -1,4 +1,8 @@
 dependencies:
   idf: ">=5.4"
+  espressif/cjson:
+    version: "^1.7.19"
+    rules:
+      - if: "idf_version >=6.0"
   espressif/esp_websocket_client: "^1.2"
   espressif/mdns: "^1.2"

@@ -1,3 +1,9 @@
+if(IDF_VERSION_MAJOR GREATER_EQUAL 6)
+    set(json_component espressif__cjson)
+else()
+    set(json_component json)
+endif()
+
 idf_component_register(
     SRCS
         "main.c"
@@ -12,7 +18,7 @@ idf_component_register(
         esp_event
         esp_timer
         nvs_flash
-        json
+        ${json_component}
         espressif__esp_websocket_client
         espressif__mdns
 )
